@@ -184,7 +184,7 @@ class Image():
                                         self.T_air,
                                         self.ux,
                                         self.UR,
-                                        self.elevation,
+                                        self.z_alt,
           ])
 
         #self.T_air = col_meteorology.select('AirT_G') #AIR TEMPERATURE [C]
