@@ -83,6 +83,11 @@ class TimeSeries():
         #LIST FOR ET AND DATES
         self.List_ET=[]
         self.List_Date=[]
+        self.List_T_air=[]
+        self.List_ux=[]
+        self.List_UR=[]
+        self.List_z_alt=[]
+        self.List_slope=[]
 
         #====== ITERATIVE PROCESS ======#
         #FOR EACH IMAGE ON THE LIST
@@ -249,6 +254,11 @@ class TimeSeries():
             #ADD LIST
             self.List_ET.append(self.ET_point_get)
             self.List_Date.append(self._Date)
+            self.List_T_air.append(self.T_air)
+            self.List_ux.append(self.ux)
+            self.List_UR.append(self.UR)
+            self.List_z_alt.append(self.z_alt)
+            self.List_slope.append(self.slope)
 
             #except:
                 # ERRORS CAN OCCUR WHEN:
