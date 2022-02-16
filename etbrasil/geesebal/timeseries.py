@@ -85,6 +85,7 @@ class TimeSeries():
         self.List_ET=[]
         self.List_NDVI=[]
         self.List_T_air=[]
+        self.List_T_land=[]
         self.List_ux=[]
         self.List_UR=[]
         self.List_z_alt=[]
@@ -207,6 +208,7 @@ class TimeSeries():
             #LAND SURFACE TEMPERATURE
             #self.image =fexp_lst_export(self.image,self.col_rad,self.landsat_version,self.geometryReducer)
             self.image=LST_DEM_correction(self.image, self.z_alt, self.T_air, self.UR,self.sun_elevation,self._hour,self._minuts)
+            self.T_land = self.image.select('T_LST_DEM').rename('LandT_G')
 
             #COLD PIXEL
             self.d_cold_pixel=fexp_cold_pixel(self.image, self.geometryReducer, self.p_top_NDVI, self.p_coldest_Ts)
@@ -259,6 +261,9 @@ class TimeSeries():
             self.T_air_daily=self.T_air.select(['AirT_G'],[self.NAME_FINAL])
             self.T_air_point = extractValue(self.T_air_daily)
 
+            self.T_land_daily=self.T_land.select(['LandT_G'],[self.NAME_FINAL])
+            self.T_land_point = extractValue(self.T_land_daily)
+
             self.ux_daily=self.ux.select(['ux_G'],[self.NAME_FINAL])
             self.ux_point = extractValue(self.ux_daily)
 
@@ -277,6 +282,7 @@ class TimeSeries():
             self.ET_point_get = ee.Number(self.ET_point.get(self.NAME_FINAL)).getInfo()
             self.NDVI_point_get = ee.Number(self.NDVI_point.get(self.NAME_FINAL)).getInfo()
             self.T_air_point_get = ee.Number(self.T_air_point.get(self.NAME_FINAL)).getInfo()
+            self.T_land_point_get = ee.Number(self.T_land_point.get(self.NAME_FINAL)).getInfo()
             self.ux_point_get = ee.Number(self.ux_point.get(self.NAME_FINAL)).getInfo()
             self.UR_point_get = ee.Number(self.UR_point.get(self.NAME_FINAL)).getInfo()
             self.z_alt_point_get = ee.Number(self.z_alt_point.get(self.NAME_FINAL)).getInfo()
@@ -287,6 +293,7 @@ class TimeSeries():
             self.List_ET.append(self.ET_point_get)
             self.List_NDVI.append(self.NDVI_point_get)
             self.List_T_air.append(self.T_air_point_get)
+            self.List_T_land.append((float(self.T_land_point_get) - 273.15) if self.T_land_point_get else None)
             self.List_ux.append(self.ux_point_get)
             self.List_UR.append(self.UR_point_get)
             self.List_z_alt.append(self.z_alt_point_get)
