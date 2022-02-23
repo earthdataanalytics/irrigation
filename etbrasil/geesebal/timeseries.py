@@ -101,7 +101,8 @@ class TimeSeries():
             self.image=ee.Image(self.image)
 
             #PRINT ID
-            print(self.image.get('LANDSAT_ID').getInfo())
+            img_id = self.image.get('LANDSAT_ID').getInfo()
+            print(img_id)
 
             #GET INFORMATIONS FROM IMAGE
             self._index=self.image.get('system:index')
@@ -198,114 +199,114 @@ class TimeSeries():
             self.slope = ee.Terrain.slope(self.z_alt)
 
             #TO AVOID ERRORS DURING THE PROCESS
-            #try:
-            #GET IMAGE
-            self.image=self.image.first()
+            try:
+                #GET IMAGE
+                self.image=self.image.first()
 
-            #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
-            self.image=fexp_spec_ind(self.image)
+                #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
+                self.image=fexp_spec_ind(self.image)
 
-            #LAND SURFACE TEMPERATURE
-            #self.image =fexp_lst_export(self.image,self.col_rad,self.landsat_version,self.geometryReducer)
-            self.image=LST_DEM_correction(self.image, self.z_alt, self.T_air, self.UR,self.sun_elevation,self._hour,self._minuts)
-            self.T_land = self.image.select('T_LST_DEM').rename('LandT_G')
+                #LAND SURFACE TEMPERATURE
+                #self.image =fexp_lst_export(self.image,self.col_rad,self.landsat_version,self.geometryReducer)
+                self.image=LST_DEM_correction(self.image, self.z_alt, self.T_air, self.UR,self.sun_elevation,self._hour,self._minuts)
+                self.T_land = self.image.select('T_LST_DEM').rename('LandT_G')
 
-            #COLD PIXEL
-            self.d_cold_pixel=fexp_cold_pixel(self.image, self.geometryReducer, self.p_top_NDVI, self.p_coldest_Ts)
+                #COLD PIXEL
+                self.d_cold_pixel=fexp_cold_pixel(self.image, self.geometryReducer, self.p_top_NDVI, self.p_coldest_Ts)
 
-            #COLD PIXEL NUMBER
-            self.n_Ts_cold = ee.Number(self.d_cold_pixel.get('temp').getInfo())
+                #COLD PIXEL NUMBER
+                self.n_Ts_cold = ee.Number(self.d_cold_pixel.get('temp').getInfo())
 
-            #INSTANTANEOUS OUTGOING LONG-WAVE RADIATION [W M-2]
-            self.image=fexp_radlong_up(self.image)
+                #INSTANTANEOUS OUTGOING LONG-WAVE RADIATION [W M-2]
+                self.image=fexp_radlong_up(self.image)
 
-            #INSTANTANEOUS INCOMING SHORT-WAVE RADIATION [W M-2]
-            self.image=fexp_radshort_down(self.image,self.z_alt,self.T_air,self.UR, self.sun_elevation)
+                #INSTANTANEOUS INCOMING SHORT-WAVE RADIATION [W M-2]
+                self.image=fexp_radshort_down(self.image,self.z_alt,self.T_air,self.UR, self.sun_elevation)
 
-            #INSTANTANEOUS INCOMING LONGWAVE RADIATION [W M-2]
-            self.image=fexp_radlong_down(self.image, self.n_Ts_cold)
+                #INSTANTANEOUS INCOMING LONGWAVE RADIATION [W M-2]
+                self.image=fexp_radlong_down(self.image, self.n_Ts_cold)
 
-            #INSTANTANEOUS NET RADIATON BALANCE [W M-2]
-            self.image=fexp_radbalance(self.image)
+                #INSTANTANEOUS NET RADIATON BALANCE [W M-2]
+                self.image=fexp_radbalance(self.image)
 
-            #SOIL HEAT FLUX (G) [W M-2]
-            self.image=fexp_soil_heat(self.image)
+                #SOIL HEAT FLUX (G) [W M-2]
+                self.image=fexp_soil_heat(self.image)
 
-            #HOT PIXEL
-            self.d_hot_pixel=fexp_hot_pixel(self.image, self.geometryReducer,self.p_lowest_NDVI, self.p_hottest_Ts)
+                #HOT PIXEL
+                self.d_hot_pixel=fexp_hot_pixel(self.image, self.geometryReducer,self.p_lowest_NDVI, self.p_hottest_Ts)
 
-            #SENSIBLE HEAT FLUX (H) [W M-2]
-            self.image=fexp_sensible_heat_flux(self.image, self.ux, self.UR,self.Rn24hobs,self.n_Ts_cold,
-                                               self.d_hot_pixel, self.date_string, self.geometryReducer)
+                #SENSIBLE HEAT FLUX (H) [W M-2]
+                self.image=fexp_sensible_heat_flux(self.image, self.ux, self.UR,self.Rn24hobs,self.n_Ts_cold,
+                                                   self.d_hot_pixel, self.date_string, self.geometryReducer)
 
-            #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
-            self.image=fexp_et(self.image,self.Rn24hobs)
+                #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
+                self.image=fexp_et(self.image,self.Rn24hobs)
 
-            self.NAME_FINAL=self.LANDSAT_ID[:5]+self.LANDSAT_ID[10:17]+self.LANDSAT_ID[17:25]
-            #self.ET_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
+                self.NAME_FINAL=self.LANDSAT_ID[:5]+self.LANDSAT_ID[10:17]+self.LANDSAT_ID[17:25]
+                #self.ET_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
 
-            #EXTRACT VALUES
-            def extractValue(var):
-                return var.reduceRegion(
-                    reducer=ee.Reducer.first(),
-                    geometry=self.coordinate,
-                    scale=30,
-                    maxPixels=1e14)
+                #EXTRACT VALUES
+                def extractValue(var):
+                    return var.reduceRegion(
+                        reducer=ee.Reducer.first(),
+                        geometry=self.coordinate,
+                        scale=30,
+                        maxPixels=1e14)
 
-            self.ET_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
-            self.ET_point = extractValue(self.ET_daily)
+                self.ET_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
+                self.ET_point = extractValue(self.ET_daily)
 
-            self.NDVI_daily=self.image.select(['NDVI'],[self.NAME_FINAL])
-            self.NDVI_point = extractValue(self.NDVI_daily)
+                self.NDVI_daily=self.image.select(['NDVI'],[self.NAME_FINAL])
+                self.NDVI_point = extractValue(self.NDVI_daily)
 
-            self.T_air_daily=self.T_air.select(['AirT_G'],[self.NAME_FINAL])
-            self.T_air_point = extractValue(self.T_air_daily)
+                self.T_air_daily=self.T_air.select(['AirT_G'],[self.NAME_FINAL])
+                self.T_air_point = extractValue(self.T_air_daily)
 
-            self.T_land_daily=self.T_land.select(['LandT_G'],[self.NAME_FINAL])
-            self.T_land_point = extractValue(self.T_land_daily)
+                self.T_land_daily=self.T_land.select(['LandT_G'],[self.NAME_FINAL])
+                self.T_land_point = extractValue(self.T_land_daily)
 
-            self.ux_daily=self.ux.select(['ux_G'],[self.NAME_FINAL])
-            self.ux_point = extractValue(self.ux_daily)
+                self.ux_daily=self.ux.select(['ux_G'],[self.NAME_FINAL])
+                self.ux_point = extractValue(self.ux_daily)
 
-            self.UR_daily=self.UR.select(['RH_G'],[self.NAME_FINAL])
-            self.UR_point = extractValue(self.UR_daily)
+                self.UR_daily=self.UR.select(['RH_G'],[self.NAME_FINAL])
+                self.UR_point = extractValue(self.UR_daily)
 
-            self.z_alt_daily=self.srtm.select(['elevation'],[self.NAME_FINAL])
-            self.z_alt_point = extractValue(self.z_alt_daily)
+                self.z_alt_daily=self.srtm.select(['elevation'],[self.NAME_FINAL])
+                self.z_alt_point = extractValue(self.z_alt_daily)
 
-            self.slope_daily=self.slope.select(['slope'],[self.NAME_FINAL])
-            self.slope_point = extractValue(self.slope_daily)
+                self.slope_daily=self.slope.select(['slope'],[self.NAME_FINAL])
+                self.slope_point = extractValue(self.slope_daily)
 
 
-            #GET DATE AND DAILY ET
-            self._Date = datetime.datetime.strptime(self.date_string,'%Y-%m-%d')
-            self.ET_point_get = ee.Number(self.ET_point.get(self.NAME_FINAL)).getInfo()
-            self.NDVI_point_get = ee.Number(self.NDVI_point.get(self.NAME_FINAL)).getInfo()
-            self.T_air_point_get = ee.Number(self.T_air_point.get(self.NAME_FINAL)).getInfo()
-            self.T_land_point_get = ee.Number(self.T_land_point.get(self.NAME_FINAL)).getInfo()
-            self.ux_point_get = ee.Number(self.ux_point.get(self.NAME_FINAL)).getInfo()
-            self.UR_point_get = ee.Number(self.UR_point.get(self.NAME_FINAL)).getInfo()
-            self.z_alt_point_get = ee.Number(self.z_alt_point.get(self.NAME_FINAL)).getInfo()
-            self.slope_point_get = ee.Number(self.slope_point.get(self.NAME_FINAL)).getInfo()
+                #GET DATE AND DAILY ET
+                self._Date = datetime.datetime.strptime(self.date_string,'%Y-%m-%d')
+                self.ET_point_get = ee.Number(self.ET_point.get(self.NAME_FINAL)).getInfo()
+                self.NDVI_point_get = ee.Number(self.NDVI_point.get(self.NAME_FINAL)).getInfo()
+                self.T_air_point_get = ee.Number(self.T_air_point.get(self.NAME_FINAL)).getInfo()
+                self.T_land_point_get = ee.Number(self.T_land_point.get(self.NAME_FINAL)).getInfo()
+                self.ux_point_get = ee.Number(self.ux_point.get(self.NAME_FINAL)).getInfo()
+                self.UR_point_get = ee.Number(self.UR_point.get(self.NAME_FINAL)).getInfo()
+                self.z_alt_point_get = ee.Number(self.z_alt_point.get(self.NAME_FINAL)).getInfo()
+                self.slope_point_get = ee.Number(self.slope_point.get(self.NAME_FINAL)).getInfo()
 
-            #ADD LIST
-            self.List_Date.append(self._Date)
-            self.List_ET.append(self.ET_point_get)
-            self.List_NDVI.append(self.NDVI_point_get)
-            self.List_T_air.append(self.T_air_point_get)
-            self.List_T_land.append((float(self.T_land_point_get) - 273.15) if self.T_land_point_get else None)
-            self.List_ux.append(self.ux_point_get)
-            self.List_UR.append(self.UR_point_get)
-            self.List_z_alt.append(self.z_alt_point_get)
-            self.List_slope.append(self.slope_point_get)
+                #ADD LIST
+                self.List_Date.append(self._Date)
+                self.List_ET.append(self.ET_point_get)
+                self.List_NDVI.append(self.NDVI_point_get)
+                self.List_T_air.append(self.T_air_point_get)
+                self.List_T_land.append((float(self.T_land_point_get) - 273.15) if self.T_land_point_get else None)
+                self.List_ux.append(self.ux_point_get)
+                self.List_UR.append(self.UR_point_get)
+                self.List_z_alt.append(self.z_alt_point_get)
+                self.List_slope.append(self.slope_point_get)
 
-            #except:
+            except:
                 # ERRORS CAN OCCUR WHEN:
                 # - THERE IS NO METEOROLOGICAL INFORMATION.
                 # - ET RETURN NULL IF AT THE POINT WAS APPLIED MASK CLOUD.
                 # - CONEECTION ISSUES.
                 # - SEBAL DOESN'T FIND A REASONABLE LINEAR RELATIONSHIP (dT).
 
-                #print('An error has occurred.')
+                print('An error has occurred, skipping', img_id)
 
             n=n+1
