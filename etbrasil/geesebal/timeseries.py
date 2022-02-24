@@ -45,6 +45,7 @@ class TimeSeries():
                  day_e,
                  cloud_cover,
                  coordinate,
+                 buffersize=90,
                  NDVI_cold=5,
                  Ts_cold=20,
                  NDVI_hot=10,
@@ -52,7 +53,7 @@ class TimeSeries():
 
         #INFORMATIONS
         self.coordinate=coordinate
-        self.buffer=self.coordinate.buffer(90)
+        self.buffer=self.coordinate.buffer(buffersize)
         self.cloud_cover=cloud_cover
         self.start_date = ee.Date.fromYMD(year_i,month_i,day_i)
         self.i_date=date(year_i,month_i,day_i)
@@ -83,6 +84,8 @@ class TimeSeries():
         #LIST FOR ET AND DATES
         self.List_Date=[]
         self.List_ET=[]
+        self.List_ET_min=[]
+        self.List_ET_max=[]
         self.List_NDVI=[]
         self.List_T_air=[]
         self.List_T_land=[]
@@ -252,9 +255,27 @@ class TimeSeries():
                         geometry=self.coordinate,
                         scale=30,
                         maxPixels=1e14)
+                def extractMinValue(var):
+                    return var.reduceRegion(
+                        reducer=ee.Reducer.min(),
+                        geometry=self.coordinate,
+                        scale=30,
+                        maxPixels=1e14)
+                def extractMaxValue(var):
+                    return var.reduceRegion(
+                        reducer=ee.Reducer.max(),
+                        geometry=self.coordinate,
+                        scale=30,
+                        maxPixels=1e14)
 
                 self.ET_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
                 self.ET_point = extractValue(self.ET_daily)
+
+                self.ET_min_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
+                self.ET_min_point = extractMinValue(self.ET_min_daily)
+
+                self.ET_max_daily=self.image.select(['ET_24h'],[self.NAME_FINAL])
+                self.ET_max_point = extractMaxValue(self.ET_max_daily)
 
                 self.NDVI_daily=self.image.select(['NDVI'],[self.NAME_FINAL])
                 self.NDVI_point = extractValue(self.NDVI_daily)
@@ -281,6 +302,8 @@ class TimeSeries():
                 #GET DATE AND DAILY ET
                 self._Date = datetime.datetime.strptime(self.date_string,'%Y-%m-%d')
                 self.ET_point_get = ee.Number(self.ET_point.get(self.NAME_FINAL)).getInfo()
+                self.ET_min_point_get = ee.Number(self.ET_min_point.get(self.NAME_FINAL)).getInfo()
+                self.ET_max_point_get = ee.Number(self.ET_max_point.get(self.NAME_FINAL)).getInfo()
                 self.NDVI_point_get = ee.Number(self.NDVI_point.get(self.NAME_FINAL)).getInfo()
                 self.T_air_point_get = ee.Number(self.T_air_point.get(self.NAME_FINAL)).getInfo()
                 self.T_land_point_get = ee.Number(self.T_land_point.get(self.NAME_FINAL)).getInfo()
@@ -292,6 +315,8 @@ class TimeSeries():
                 #ADD LIST
                 self.List_Date.append(self._Date)
                 self.List_ET.append(self.ET_point_get)
+                self.List_ET_min.append(self.ET_min_point_get)
+                self.List_ET_max.append(self.ET_max_point_get)
                 self.List_NDVI.append(self.NDVI_point_get)
                 self.List_T_air.append(self.T_air_point_get)
                 self.List_T_land.append((float(self.T_land_point_get) - 273.15) if self.T_land_point_get else None)
