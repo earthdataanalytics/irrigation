@@ -230,9 +230,12 @@ def LST_DEM_correction(image, z_alt, T_air, UR,SUN_ELEVATION,hour,minuts):
        ' 0.6108 *(exp( (17.27 * T_air) / (T_air + 237.3)))', {
        'T_air': T_air}).rename('ES')
 
-    #ACTUAL VAPOR PRESSURE (ea) [KPA]
-    ea = es.multiply(UR).divide(100).rename('EA')
-
+    try:
+        #ACTUAL VAPOR PRESSURE (ea) [KPA]
+        ea = es.multiply(UR).divide(100).rename('EA')
+    except:
+        raise
+        
     #WATER IN THE ATMOSPHERE [mm]
     #Garrison and Adler (1990)
     W = image.expression(
