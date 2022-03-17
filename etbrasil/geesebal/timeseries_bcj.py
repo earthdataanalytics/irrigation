@@ -56,7 +56,8 @@ class TimeSeries_bcj():
                  NDVI_cold=5,
                  Ts_cold=20,
                  NDVI_hot=10,
-                 Ts_hot=20):
+                 Ts_hot=20,
+                 calcRegionalET=False):
 
         #output variable
         self.ETandMeteo = None
@@ -205,11 +206,12 @@ class TimeSeries_bcj():
                 ET_daily=image.select(['ET_24h'],[NAME_FINAL])
                 ET_point = extractValue(ET_daily)
 
-                ET_min_daily=image.select(['ET_24h'],[NAME_FINAL])
-                ET_min_point = extractMinValue(ET_min_daily)
+                if calcRegionalET:
+                    ET_min_daily=image.select(['ET_24h'],[NAME_FINAL])
+                    ET_min_point = extractMinValue(ET_min_daily)
 
-                ET_max_daily=image.select(['ET_24h'],[NAME_FINAL])
-                ET_max_point = extractMaxValue(ET_max_daily)
+                    ET_max_daily=image.select(['ET_24h'],[NAME_FINAL])
+                    ET_max_point = extractMaxValue(ET_max_daily)
 
                 NDVI_daily=image.select(['NDVI'],[NAME_FINAL])
                 NDVI_point = extractValue(NDVI_daily)
@@ -234,8 +236,14 @@ class TimeSeries_bcj():
 
                 #GET DATE AND DAILY ET
                 ET_point_get = ee.Number(ET_point.get(NAME_FINAL))
-                ET_min_point_get = ee.Number(ET_min_point.get(NAME_FINAL))
-                ET_max_point_get = ee.Number(ET_max_point.get(NAME_FINAL))
+
+                if calcRegionalET:
+                    ET_min_point_get = ee.Number(ET_min_point.get(NAME_FINAL))
+                    ET_max_point_get = ee.Number(ET_max_point.get(NAME_FINAL))
+                else: # this will effectively cause any downstream ET_R calculations to return the ET_24h value
+                    ET_min_point_get = ee.Number(0.0)
+                    ET_max_point_get = ee.Number(1.0)
+
                 NDVI_point_get = ee.Number(NDVI_point.get(NAME_FINAL))
                 T_air_point_get = ee.Number(T_air_point.get(NAME_FINAL))
                 T_land_point_get = ee.Number(T_land_point.get(NAME_FINAL))#.subtract(ee.Number(273.15))
@@ -297,7 +305,6 @@ class TimeSeries_bcj():
                                 .map(get_meteorology) \
                                 .map(retrieveETandMeteo)
         self.ETandMeteo = fc5
-#                                .filter(ee.Filter.notNull('system:time_start'))
 
         fc7 = self.collection_l7.map(f_cloudMaskL457_SR) \
                                 .map(f_albedoL5L7) \
