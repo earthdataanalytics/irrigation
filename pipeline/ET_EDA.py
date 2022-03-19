@@ -54,11 +54,12 @@ import json
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-i
+
 from zipfile import ZipFile
 import os
 import glob
 import joblib
+from datetime import datetime
 from tqdm.notebook import tqdm
 
 import matplotlib.pyplot as plt
@@ -67,14 +68,16 @@ import seaborn as sns
 # custom libraries
 import utils
 
-
 # ## Load, transform and cleanse data
 
-def main(datafile=None):
+def main(datafile=None,
+        inpath='',
+        outpath=''):
     data_filename = datafile
 
     df = pd.DataFrame()
-    files = ZipFile(data_filename).filelist
+    zf = ZipFile(inpath + data_filename)
+    files = zf.filelist
     for file in tqdm(files):
         df = pd.concat([df, pd.read_csv(zf.open(file))], ignore_index=True)
 
@@ -83,40 +86,52 @@ def main(datafile=None):
 
     out_foldername = data_filename.split('.')[0]
     ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    path = out_foldername + '/' + ts + '/'
-    os.mkdir(path)
+    path = outpath + out_foldername + '/'
+
+    if not os.path.exists(outpath):
+        os.mkdir(outpath)
+    if not os.path.exists(outpath+out_foldername):
+        os.mkdir(outpath+out_foldername)
+    if not os.path.exists(path):
+        os.mkdir(path)
 
     # ## EDA
 
     out_stats = {
+        'dataname': out_foldername,
+        'runtime': ts
     }
 
     # ##### Basic counts
-    out_stats['num_samples'] = len(df)
-    out_stats['num_blank_ET_samples'] = df.ET_24h.isna().sum()
-    out_stats['num_locations'] = len(df['loc_idx'].unique())
+    out_stats['num_samples'] = int(len(df))
+    out_stats['num_blank_ET_samples'] = int(df.ET_24h.isna().sum())
+    out_stats['num_locations'] = int(len(df['loc_idx'].unique()))
 
-    out_stats['num_ok_irr_samples'] = len(df[(df.loc_type == 0) & (~df.ET_24h.isna())])
-    out_stats['num_ok_rain_samples'] = len(df[(df.loc_type == 1) & (~df.ET_24h.isna())])
+    df, out_stats['num_ET_too_low'] = utils.baseETcleanse(df)
+
+    out_stats['num_ok_irr_samples'] = int(len(df[(df.loc_type == 0) & (~df.ET_24h.isna())]))
+    out_stats['num_ok_rain_samples'] = int(len(df[(df.loc_type == 1) & (~df.ET_24h.isna())]))
 
     # check for any dates where the location type changes between rainfed and irrigated
     #     - this was tested by manually changing a datapoint
     #     - it will show any rows where the type changed for a specific location
     df_tmp = df.sort_values(['loc_idx', 'date']).groupby(['loc_idx'])
-    out_stats['num_type_changes'] = len(df[df_tmp.loc_type.diff() > 0])
+    out_stats['num_type_changes'] = int(len(df[df_tmp.loc_type.diff() > 0]))
 
     # inspect number of datapoints
-    print(f'Total number of samples        {out_stats['num_samples']:>5}')
-    print(f'Number of blank ET_24 samples  {out_stats['num_blank_ET_samples']:>5}')
-    print(f'Number of locations            {out_stats['num_locations']:>5}')
-
-    print(f'Number of OK irrigated samples {out_stats['num_ok_irr_samples']:>5}')
-    print(f'Number of OK rainfed samples   {out_stats['num_ok_rain_samples']:>5}')
-
+    print(f'Number of locations            {out_stats["num_locations"]:>5}')
+    print(f'Total number of samples        {out_stats["num_samples"]:>5}')
+    print(f'Number of blank ET samples     {out_stats["num_blank_ET_samples"]:>5}')
+    print(f'Number of too low ET samples   {out_stats["num_ET_too_low"]:>5}')
+    print(f'Number of OK irrigated samples {out_stats["num_ok_irr_samples"]:>5}')
+    print(f'Number of OK rainfed samples   {out_stats["num_ok_rain_samples"]:>5}')
     print('Number of locations changing')
-    print(f'    between Irr/Rain labels    {out_stats['num_type_changes']:>5}')
+    print(f'    between Irr/Rain labels    {out_stats["num_type_changes"]:>5}')
 
     # ##### Plots
+
+    # needed to deactive output warning
+    np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
     # histogram
     fig, ax = plt.subplots(1,3, figsize=(20,5))
@@ -173,6 +188,8 @@ def main(datafile=None):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datafile', required=True, help='filename of ET data to process')
+    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='filename of ET data to process')
+    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for input files')
     return parser.parse_args()
 
 if __name__ == "__main__":

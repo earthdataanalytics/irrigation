@@ -24,8 +24,8 @@ def baseETtransforms(df):
     return df
 
 def baseETcleanse(df):
-    print('Number of erroneous ET_24h samples removed =', len(df[df.ET_24h < -2]))
-    return df[df['ET_24h'] > -2]
+    num_errs = len(df[df.ET_24h < -2])
+    return df[df['ET_24h'] > -2], num_errs
 
 def generateETlocationLabels(df):
     df['loc_idx_tmp'] = df['longitude'].astype(str) + ', ' + df['latitude'].astype(str)
@@ -33,7 +33,7 @@ def generateETlocationLabels(df):
     num_locs = len(df['loc_idx_tmp'].unique())
     for i in range(num_locs):
         vals = df['loc_idx_tmp'].unique()[i]
-        df.loc[df['loc_idx_tmp'] == vals, 'loc_idx'] = i
+        df.loc[df['loc_idx_tmp'] == vals, 'loc_idx'] = int(i)
 
     df.drop(['loc_idx_tmp'], axis=1, inplace=True)
     return df

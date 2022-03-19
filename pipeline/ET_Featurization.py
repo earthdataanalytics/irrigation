@@ -48,6 +48,7 @@ import pandas as pd
 import json
 
 from zipfile import ZipFile
+import os
 import glob
 import joblib
 from datetime import datetime
@@ -70,18 +71,39 @@ def main(datafile=None,
 
     # ## Load, transform and cleanse data
     df = pd.DataFrame()
-    files = ZipFile(inpath + data_filename).filelist
+    zf = ZipFile(inpath + data_filename)
+    files = zf.filelist
     for file in tqdm(files):
         df = pd.concat([df, pd.read_csv(zf.open(file))], ignore_index=True)
 
     df = utils.baseETtransforms(df)
-    df = utils.baseETcleanse(df)
+    df, num_ET_err = utils.baseETcleanse(df)
     df = utils.generateETlocationLabels(df)
 
     out_foldername = data_filename.split('.')[0]
+    path = outpath + out_foldername + '/'
+
+    if not os.path.exists(outpath):
+        os.mkdir(outpath)
+    if not os.path.exists(outpath+out_foldername):
+        os.mkdir(outpath+out_foldername)
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    statsfilename = path + 'summary_stats.json'
     ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    path = outpath + out_foldername + '/' + ts + '/'
-    os.mkdir(path)
+    out_stats = {
+        'dataname': out_foldername,
+        'runtime': ts
+    }
+    if os.path.exists(statsfilename):
+        with open(statsfilename, 'r', encoding='utf-8') as f:
+            out_stats = json.load(f)
+    else:
+        out_stats['num_samples'] = int(len(df))
+        out_stats['num_blank_ET_samples'] = int(df.ET_24h.isna().sum())
+        out_stats['num_locations'] = int(len(df['loc_idx'].unique()))
+        out_stats['num_ET_too_low'] = int(num_ET_err)
 
     # ## Feature Engineering
     df_features = df
@@ -113,19 +135,31 @@ def main(datafile=None,
 
     # ##### Remove low NDVI
     if filter_ndvi:
+        out_stats['num_ndvi_filtered_out'] = int((df_features.NDVI >= 0.2).sum())
         df_features = df_features[df_features.NDVI >= 0.2] # keep data points where NDVI > threshold
                                             # threshold discussed in team meetings on 22 & 25 Feb 2022
 
     # ##### Retain data when no precipitation in prior X days
     if filter_rain:
+        out_stats['num_rain_filtered_out'] = int((df_features.last_rain > 3).sum())
         df_features = df_features[df_features.last_rain > 3] # threshold defined in team meeting on 22 Feb 2022
 
     # ##### Regionalized ET_24h score: ET_24h_R
-    df_features['ET_24h_R'] = (df_features['ET_24h'].subtract(df_features['ET_R_min']))                   .divide(
+    df_features['ET_24h_R'] = (df_features['ET_24h'].subtract(df_features['ET_R_min'])) \
+                       .divide(
                                df_features['ET_R_max'].subtract(df_features['ET_R_min']).replace(0,np.nan)
                               )
+
     # ## Save working dataframe for next step in pipeline
     df_features.to_pickle(path + 'features.pkl')
+
+    # ## Save summary statistics
+    for key in terrain_types.keys():
+        out_stats['num_'+key+'_post_filters'] = int(len(df_features['type'] == key))
+
+    filename = path + 'summary_stats.json'
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(out_stats, f, ensure_ascii=False, indent=4)
 
 
 def parse_opt():
@@ -134,8 +168,8 @@ def parse_opt():
     parser.add_argument('--filter_ndvi', required=False, default=True, help='Use NDVI filter')
     parser.add_argument('--filter_rain', required=False, default=True, help='Use Rain filter')
     parser.add_argument('--calc_ET_region', required=False, default=False, help='Use regionalized ET')
-    parser.add_argument('--inpath', required=False, default='../raw_data/', help='Path for input files')
-    parser.add_argument('--outpath', required=False, default='../runs/', help='Path for input files')
+    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
     return parser.parse_args()
 
 if __name__ == "__main__":
