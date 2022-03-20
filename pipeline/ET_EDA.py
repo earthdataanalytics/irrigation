@@ -31,8 +31,6 @@
 # - earthengine
 # - geemap
 # - geopandas
-# - hdbscan
-# - ipympl (only for interactive charts with matplotlib)
 
 
 #!pip install earthengine-api
@@ -51,9 +49,6 @@ ee.Initialize()
 import numpy as np
 import pandas as pd
 import json
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 
 from zipfile import ZipFile
 import os
@@ -187,9 +182,9 @@ def main(datafile=None,
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--datafile', required=True, help='filename of ET data to process')
-    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='filename of ET data to process')
-    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for input files')
+    parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
+    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
     return parser.parse_args()
 
 if __name__ == "__main__":

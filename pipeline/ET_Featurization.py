@@ -24,17 +24,11 @@
 # - earthengine
 # - geemap
 # - geopandas
-# - hdbscan
-# - ipympl (only for interactive charts with matplotlib)
-
-# In[1]:
 
 
 #!pip install earthengine-api
 #!pip install geemap
 #!pip install geopandas
-#!pip install hdbscan
-#!pip install ipympl
 
 import argparse
 import sys
@@ -54,16 +48,12 @@ import joblib
 from datetime import datetime
 from tqdm.notebook import tqdm
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 # custom libraries
 import utils
 
 def main(datafile=None,
             filter_ndvi=True,
             filter_rain=True,
-            calc_ET_region=False,
             inpath='',
             outpath=''):
 
@@ -167,7 +157,6 @@ def parse_opt():
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
     parser.add_argument('--filter_ndvi', required=False, default=True, help='Use NDVI filter')
     parser.add_argument('--filter_rain', required=False, default=True, help='Use Rain filter')
-    parser.add_argument('--calc_ET_region', required=False, default=False, help='Use regionalized ET')
     parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
     return parser.parse_args()
