@@ -67,7 +67,9 @@ import utils
 
 def analyze(datafile=None,
         inpath='',
-        outpath=''):
+        outpath='',
+        verbose=False):
+        
     data_filename = datafile
 
     df = pd.DataFrame()
@@ -114,14 +116,15 @@ def analyze(datafile=None,
     out_stats['num_type_changes'] = int(len(df[df_tmp.loc_type.diff() > 0]))
 
     # inspect number of datapoints
-    print(f'Number of locations            {out_stats["num_locations"]:>5}')
-    print(f'Total number of samples        {out_stats["num_samples"]:>5}')
-    print(f'Number of blank ET samples     {out_stats["num_blank_ET_samples"]:>5}')
-    print(f'Number of too low ET samples   {out_stats["num_ET_too_low"]:>5}')
-    print(f'Number of OK irrigated samples {out_stats["num_ok_irr_samples"]:>5}')
-    print(f'Number of OK rainfed samples   {out_stats["num_ok_rain_samples"]:>5}')
-    print('Number of locations changing')
-    print(f'    between Irr/Rain labels    {out_stats["num_type_changes"]:>5}')
+    if verbose:
+        print(f'Number of locations            {out_stats["num_locations"]:>5}')
+        print(f'Total number of samples        {out_stats["num_samples"]:>5}')
+        print(f'Number of blank ET samples     {out_stats["num_blank_ET_samples"]:>5}')
+        print(f'Number of too low ET samples   {out_stats["num_ET_too_low"]:>5}')
+        print(f'Number of OK irrigated samples {out_stats["num_ok_irr_samples"]:>5}')
+        print(f'Number of OK rainfed samples   {out_stats["num_ok_rain_samples"]:>5}')
+        print('Number of locations changing')
+        print(f'    between Irr/Rain labels    {out_stats["num_type_changes"]:>5}')
 
     # ##### Plots
 
@@ -185,6 +188,7 @@ def parse_opt():
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
     parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
+    parser.add_argument('--verbose', action='store_true', help='Print output to console')
     return parser.parse_args()
 
 if __name__ == "__main__":

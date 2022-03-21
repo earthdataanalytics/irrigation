@@ -65,7 +65,7 @@ def fit(datafile=None,
         inpath='',
         outpath='',
         calc_ET_region=False,
-        no_save_model=True):
+        no_save_model=False):
 
     filter_ndvi = not no_filter_ndvi
     filter_rain = not no_filter_rain
@@ -232,12 +232,12 @@ def fit(datafile=None,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
-    parser.add_argument('--no_filter_ndvi', action='store_true', help='Use NDVI filter')
-    parser.add_argument('--no_filter_rain', action='store_true', help='Use Rain filter')
+    parser.add_argument('--no_filter_ndvi', action='store_true', help='Disable NDVI filter')
+    parser.add_argument('--no_filter_rain', action='store_true', help='Disable Rain filter')
     parser.add_argument('--calc_ET_region', action='store_true', help='Use regionalized ET')
     parser.add_argument('--inpath', required=False, default='../../runs/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
-    parser.add_argument('--no_save_model', action='store_true', help='Save model or not')
+    parser.add_argument('--no_save_model', action='store_true', help='Disable saving model')
     return parser.parse_args()
 
 if __name__ == "__main__":
