@@ -59,18 +59,13 @@ import utils
 
 # ## Load, transform and cleanse data
 
-def train(datafile=None,
-        no_filter_ndvi=False,
-        no_filter_rain=False,
+def main(datafile=None,
+        filter_ndvi=True,
+        filter_rain=True,
         inpath='',
         outpath='',
         calc_ET_region=False,
-        no_save_model=True):
-
-    filter_ndvi = not no_filter_ndvi
-    filter_rain = not no_filter_rain
-    save_model = not no_save_model
-
+        save_model=True):
     data_filename = datafile
 
     infilename = data_filename.split('.')[0] + '/features.pkl'
@@ -232,14 +227,14 @@ def train(datafile=None,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
-    parser.add_argument('--no_filter_ndvi', action='store_true', help='Use NDVI filter')
-    parser.add_argument('--no_filter_rain', action='store_true', help='Use Rain filter')
-    parser.add_argument('--calc_ET_region', action='store_true', help='Use regionalized ET')
+    parser.add_argument('--filter_ndvi', required=False, default=True, help='Use NDVI filter')
+    parser.add_argument('--filter_rain', required=False, default=True, help='Use Rain filter')
+    parser.add_argument('--calc_ET_region', required=False, default=False, help='Use regionalized ET')
     parser.add_argument('--inpath', required=False, default='../../runs/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
-    parser.add_argument('--no_save_model', action='store_true', help='Save model or not')
+    parser.add_argument('--save_model', required=False, default=True, help='Save model or not')
     return parser.parse_args()
 
 if __name__ == "__main__":
     opt = parse_opt()
-    train(**vars(opt))
+    main(**vars(opt))

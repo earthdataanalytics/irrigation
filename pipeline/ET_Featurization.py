@@ -52,11 +52,13 @@ from tqdm.notebook import tqdm
 import utils
 
 def generateFeatures(datafile=None,
-            filter_ndvi=True,
-            filter_rain=True,
+            no_filter_ndvi=False,
+            no_filter_rain=False,
             inpath='',
             outpath=''):
 
+    filter_ndvi = not no_filter_ndvi
+    filter_rain = not no_filter_rain
     data_filename = datafile
 
     # ## Load, transform and cleanse data
@@ -155,8 +157,8 @@ def generateFeatures(datafile=None,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
-    parser.add_argument('--filter_ndvi', required=False, default=True, help='Use NDVI filter')
-    parser.add_argument('--filter_rain', required=False, default=True, help='Use Rain filter')
+    parser.add_argument('--no_filter_ndvi', action='store_true', help='Disable NDVI filter')
+    parser.add_argument('--no_filter_rain', action='store_true', help='Disable Rain filter')
     parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
     return parser.parse_args()
