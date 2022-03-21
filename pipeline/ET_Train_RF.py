@@ -59,7 +59,7 @@ import utils
 
 # ## Load, transform and cleanse data
 
-def main(datafile=None,
+def train(datafile=None,
         filter_ndvi=True,
         filter_rain=True,
         inpath='',
@@ -237,4 +237,4 @@ def parse_opt():
 
 if __name__ == "__main__":
     opt = parse_opt()
-    main(**vars(opt))
+    train(**vars(opt))
