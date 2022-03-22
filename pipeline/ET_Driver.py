@@ -38,11 +38,11 @@ import utils
 
 def run(aoi=None,
         datafile=None,
-        no_filter_ndvi=False,
-        no_filter_rain=False,
+        nofilterndvi=False,
+        nofilterrain=False,
         inpath='',
         outpath='',
-        calc_ET_region=False,
+        calcETregion=False,
         extract=False,
         no_eda=False,
         infer=False,
@@ -72,14 +72,14 @@ def run(aoi=None,
 
     print('Featurization Step')
     feat.generateFeatures(datafile=datafile, inpath=inpath, outpath=newpath,
-                    no_filter_ndvi=no_filter_ndvi, no_filter_rain=no_filter_rain)
+                    nofilterndvi=nofilterndvi, nofilterrain=nofilterrain)
 
     if not infer:
         print('Train Step')
         # requires setting inpath=outpath
         trainRF.fit(datafile=datafile, inpath=newpath, outpath=newpath,
-                    no_filter_ndvi=no_filter_ndvi, no_filter_rain=no_filter_rain,
-                    calc_ET_region=calc_ET_region, no_save_model=no_save_model)
+                    nofilterndvi=nofilterndvi, nofilterrain=nofilterrain,
+                    calcETregion=calcETregion, no_save_model=no_save_model)
 
     if infer:
         pass
@@ -91,9 +91,9 @@ def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--aoi', required=False, help='Area of Interest json filename')
     parser.add_argument('--datafile', required=False, help='Filename of ET data to process')
-    parser.add_argument('--no_filter_ndvi', required=False, default=True, help='Disable NDVI filter')
-    parser.add_argument('--no_filter_rain', required=False, default=True, help='Disable Rain filter')
-    parser.add_argument('--calc_ET_region', action='store_true', help='Use regionalized ET')
+    parser.add_argument('--nofilterndvi', required=False, default=True, help='Disable NDVI filter')
+    parser.add_argument('--nofilterrain', required=False, default=True, help='Disable Rain filter')
+    parser.add_argument('--calcETregion', action='store_true', help='Use regionalized ET')
     parser.add_argument('--extract', action='store_true', help='Extract samples for training')
     parser.add_argument('--no_eda', action='store_true', help='Disable EDA step')
     parser.add_argument('--infer', action='store_true', help='Serve model for inference')

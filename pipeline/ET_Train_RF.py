@@ -60,16 +60,16 @@ import utils
 # ## Load, transform and cleanse data
 
 def fit(datafile=None,
-        no_filter_ndvi=False,
-        no_filter_rain=False,
+        nofilterndvi=False,
+        nofilterrain=False,
         inpath='',
         outpath='',
-        calc_ET_region=False,
-        no_save_model=False):
+        calcETregion=False,
+        nosavemodel=False):
 
-    filter_ndvi = not no_filter_ndvi
-    filter_rain = not no_filter_rain
-    save_model = not no_save_model
+    filter_ndvi = not nofilterndvi
+    filter_rain = not nofilterrain
+    save_model = not nosavemodel
 
     infilename = inpath + '/features.pkl'
     if not os.path.exists(infilename):
@@ -113,7 +113,7 @@ def fit(datafile=None,
 
     # ##### Setup columns to use
     et_var = 'ET_24h'
-    if calc_ET_region:
+    if calcETregion:
         et_var = 'ET_24h_R'
     out_stats['et_var'] = et_var
     out_stats['temporality'] = 'all_months'
@@ -222,12 +222,12 @@ def fit(datafile=None,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
-    parser.add_argument('--no_filter_ndvi', action='store_true', help='Disable NDVI filter')
-    parser.add_argument('--no_filter_rain', action='store_true', help='Disable Rain filter')
-    parser.add_argument('--calc_ET_region', action='store_true', help='Use regionalized ET')
+    parser.add_argument('--nofilterndvi', action='store_true', help='Disable NDVI filter')
+    parser.add_argument('--nofilterrain', action='store_true', help='Disable Rain filter')
+    parser.add_argument('--calcETregion', action='store_true', help='Use regionalized ET')
     parser.add_argument('--inpath', required=False, default='../../runs/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
-    parser.add_argument('--no_save_model', action='store_true', help='Disable saving model')
+    parser.add_argument('--nosavemodel', action='store_true', help='Disable saving model')
     return parser.parse_args()
 
 if __name__ == "__main__":
