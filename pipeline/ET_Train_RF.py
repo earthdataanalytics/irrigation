@@ -210,7 +210,7 @@ def fit(datafile=None,
 
     # ## Save trained model
     if save_model:
-        joblib.dump(classifier, path + "rf_model.pkl", compress=3)
+        joblib.dump(classifier, path + "model_rf.pkl", compress=3)
 
 
     # ## Save summary statistics
