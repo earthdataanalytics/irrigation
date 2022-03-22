@@ -246,7 +246,7 @@ def fit(datafile=None,
 
             joblib.dump(classifier, bestpath + "model_rf.pkl", compress=3)
 
-    plt.figure().close('all')
+    plt.close('all')
 
 
 def parse_opt():

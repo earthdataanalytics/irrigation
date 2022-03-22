@@ -95,7 +95,7 @@ def analyze(datafile=None,
     #     - this was tested by manually changing a datapoint
     #     - it will show any rows where the type changed for a specific location
     df_tmp = df.sort_values(['loc_idx', 'date']).groupby(['loc_idx'])
-    out_stats['num_type_changes'] = int(len(df_tmp[df_tmp.loc_type.diff() > 0]))
+    out_stats['num_type_changes'] = int((df_tmp.loc_type.diff() > 0).sum())
 
     # inspect number of datapoints
     if verbose:
@@ -165,7 +165,7 @@ def analyze(datafile=None,
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(out_stats, f, ensure_ascii=False, indent=4)
 
-    plt.figure().close('all')
+    plt.close('all')
 
 def parse_opt():
     parser = argparse.ArgumentParser()
