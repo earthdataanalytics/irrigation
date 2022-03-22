@@ -227,6 +227,7 @@ def fit(datafile=None,
     if save_model:
         bestpath = '/'.join(path.split('/')[:-2]) + '/best/'
         statsfilename = bestpath + 'summary_stats.json'
+        print(statsfilename)
         if not os.path.exists(bestpath):
             os.mkdir(bestpath)
             save_as_best = True
@@ -244,6 +245,8 @@ def fit(datafile=None,
                 json.dump(out_stats, f, ensure_ascii=False, indent=4)
 
             joblib.dump(classifier, bestpath + "model_rf.pkl", compress=3)
+
+    plt.figure().close('all')
 
 
 def parse_opt():
