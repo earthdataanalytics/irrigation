@@ -44,9 +44,9 @@ def run(aoi=None,
         outpath='',
         calcETregion=False,
         extract=False,
-        no_eda=False,
+        noeda=False,
         infer=False,
-        no_save_model=True,
+        nosavemodel=True,
         verbose=False):
 
     if extract:
@@ -66,7 +66,7 @@ def run(aoi=None,
 
     newpath = utils.setupOutputPaths(datafile, outpath)
 
-    if (not no_eda):
+    if (not noeda):
         print('EDA Step')
         eda.analyze(datafile=datafile, inpath=inpath, outpath=newpath, verbose=verbose)
 
@@ -79,7 +79,7 @@ def run(aoi=None,
         # requires setting inpath=outpath
         trainRF.fit(datafile=datafile, inpath=newpath, outpath=newpath,
                     nofilterndvi=nofilterndvi, nofilterrain=nofilterrain,
-                    calcETregion=calcETregion, no_save_model=no_save_model)
+                    calcETregion=calcETregion, nosavemodel=nosavemodel)
 
     if infer:
         pass
@@ -95,11 +95,11 @@ def parse_opt():
     parser.add_argument('--nofilterrain', required=False, default=True, help='Disable Rain filter')
     parser.add_argument('--calcETregion', action='store_true', help='Use regionalized ET')
     parser.add_argument('--extract', action='store_true', help='Extract samples for training')
-    parser.add_argument('--no_eda', action='store_true', help='Disable EDA step')
+    parser.add_argument('--noeda', action='store_true', help='Disable EDA step')
     parser.add_argument('--infer', action='store_true', help='Serve model for inference')
     parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
-    parser.add_argument('--no_save_model', required=False, default=True, help='Disable saving model')
+    parser.add_argument('--nosavemodel', required=False, default=True, help='Disable saving model')
     parser.add_argument('--verbose', action='store_true', help='Print output to console')
     return parser.parse_args()
 
