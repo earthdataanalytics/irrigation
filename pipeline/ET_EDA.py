@@ -66,7 +66,7 @@ def analyze(datafile=None,
     df = pd.DataFrame()
     zf = ZipFile(inpath + datafile)
     files = zf.filelist
-    for file in tqdm(files):
+    for file in files:
         df = pd.concat([df, pd.read_csv(zf.open(file))], ignore_index=True)
 
     df = utils.baseETtransforms(df)

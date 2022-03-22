@@ -227,7 +227,6 @@ def fit(datafile=None,
     if save_model:
         bestpath = '/'.join(path.split('/')[:-2]) + '/best/'
         statsfilename = bestpath + 'summary_stats.json'
-        print(statsfilename)
         if not os.path.exists(bestpath):
             os.mkdir(bestpath)
             save_as_best = True

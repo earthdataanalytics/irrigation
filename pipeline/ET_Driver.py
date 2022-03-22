@@ -46,7 +46,7 @@ def run(aoi=None,
         extract=False,
         noeda=False,
         infer=False,
-        nosavemodel=True,
+        nosavemodel=False,
         verbose=False):
 
     if extract:
@@ -67,15 +67,18 @@ def run(aoi=None,
     newpath = utils.setupOutputPaths(datafile, outpath)
 
     if (not noeda):
-        print('EDA Step')
+        if verbose:
+            print('EDA Step')
         eda.analyze(datafile=datafile, inpath=inpath, outpath=newpath, verbose=verbose)
 
-    print('Featurization Step')
+    if verbose:
+        print('Featurization Step')
     feat.generateFeatures(datafile=datafile, inpath=inpath, outpath=newpath,
                     nofilterndvi=nofilterndvi, nofilterrain=nofilterrain)
 
     if not infer:
-        print('Train Step')
+        if verbose:
+            print('Train Step')
         # requires setting inpath=outpath
         trainRF.fit(datafile=datafile, inpath=newpath, outpath=newpath,
                     nofilterndvi=nofilterndvi, nofilterrain=nofilterrain,
@@ -83,7 +86,8 @@ def run(aoi=None,
 
     if infer:
         pass
-        print('Infer Step')
+        if verbose:
+            print('Infer Step')
         #serveET.predict(aoi, ...) # to be completed
 
 
