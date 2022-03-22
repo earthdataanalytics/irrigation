@@ -77,7 +77,7 @@ def run(aoi=None,
     if not infer:
         print('Train Step')
         # requires setting inpath=outpath
-        trainRF.fit(datafile=datafile, inpath=outpath, outpath=newpath,
+        trainRF.fit(datafile=datafile, inpath=newpath, outpath=newpath,
                     no_filter_ndvi=no_filter_ndvi, no_filter_rain=no_filter_rain,
                     calc_ET_region=calc_ET_region, no_save_model=no_save_model)
 

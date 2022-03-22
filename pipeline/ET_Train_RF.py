@@ -71,11 +71,11 @@ def fit(datafile=None,
     filter_rain = not no_filter_rain
     save_model = not no_save_model
 
-    infilename = datafile.split('.')[0] + '/features.pkl'
-    if not os.path.exists(inpath + infilename):
+    infilename = inpath + '/features.pkl'
+    if not os.path.exists(infilename):
         print('Missing input datafile')
 
-    df = pd.read_pickle(inpath + infilename)
+    df = pd.read_pickle(infilename)
 
     path = utils.setupOutputPaths(datafile, outpath)
 
