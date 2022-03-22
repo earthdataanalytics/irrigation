@@ -71,30 +71,20 @@ def fit(datafile=None,
     filter_rain = not no_filter_rain
     save_model = not no_save_model
 
-    data_filename = datafile
-
-    infilename = data_filename.split('.')[0] + '/features.pkl'
+    infilename = datafile.split('.')[0] + '/features.pkl'
     if not os.path.exists(inpath + infilename):
         print('Missing input datafile')
 
     df = pd.read_pickle(inpath + infilename)
 
-    out_foldername = data_filename.split('.')[0]
-    path = outpath + out_foldername + '/'
-
-    if not os.path.exists(outpath):
-        os.mkdir(outpath)
-    if not os.path.exists(outpath+out_foldername):
-        os.mkdir(outpath+out_foldername)
-    if not os.path.exists(path):
-        os.mkdir(path)
+    path = utils.setupOutputPaths(datafile, outpath)
 
     # ## Setup stats collecting
 
     statsfilename = path + 'summary_stats.json'
     ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     out_stats = {
-        'dataname': out_foldername,
+        'dataname': datafile,
         'runtime': ts
     }
     if os.path.exists(statsfilename):

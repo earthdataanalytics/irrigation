@@ -59,11 +59,10 @@ def generateFeatures(datafile=None,
 
     filter_ndvi = not no_filter_ndvi
     filter_rain = not no_filter_rain
-    data_filename = datafile
 
     # ## Load, transform and cleanse data
     df = pd.DataFrame()
-    zf = ZipFile(inpath + data_filename)
+    zf = ZipFile(inpath + datafile)
     files = zf.filelist
     for file in tqdm(files):
         df = pd.concat([df, pd.read_csv(zf.open(file))], ignore_index=True)
@@ -72,20 +71,12 @@ def generateFeatures(datafile=None,
     df, num_ET_err = utils.baseETcleanse(df)
     df = utils.generateETlocationLabels(df)
 
-    out_foldername = data_filename.split('.')[0]
-    path = outpath + out_foldername + '/'
-
-    if not os.path.exists(outpath):
-        os.mkdir(outpath)
-    if not os.path.exists(outpath+out_foldername):
-        os.mkdir(outpath+out_foldername)
-    if not os.path.exists(path):
-        os.mkdir(path)
+    path = utils.setupOutputPaths(datafile, outpath)
 
     statsfilename = path + 'summary_stats.json'
     ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     out_stats = {
-        'dataname': out_foldername,
+        'dataname': datafile,
         'runtime': ts
     }
     if os.path.exists(statsfilename):

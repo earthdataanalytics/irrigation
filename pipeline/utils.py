@@ -1,5 +1,32 @@
 import pandas as pd
 import json
+import glob
+import os
+
+def setupOutputPaths(datafile, outpath):
+    if not os.path.exists(outpath):
+        os.mkdir(outpath)
+
+    if '/exp' in outpath.split('.')[-1]:
+        return outpath
+
+    data_filename = datafile.split('.')[0]
+    exppath = 'exp01/'
+    rootpaths = glob.glob(outpath + data_filename)
+
+    if rootpaths:
+        exppaths = glob.glob(outpath + data_filename + '/exp*')
+        if exppaths:
+            lastnum = int(max(exppaths)[-2:]) + 1
+            exppath = f'exp{lastnum:02d}/'
+    else:
+        os.mkdir(outpath + data_filename)
+
+    newpath = outpath + data_filename + '/' + exppath
+    os.mkdir(newpath)
+
+    return newpath
+
 
 def baseETtransforms(df):
     # Convert LandT_G from Kelvin to Celsius

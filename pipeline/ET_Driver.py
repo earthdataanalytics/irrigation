@@ -9,7 +9,10 @@
 #
 # Usage:
 #
-#     1) Pass in the datafile to use (should be located at path ../raw_data/)
+#     python ET_Driver.py --datafile ET_20220308_wesus8_WA.zip
+# or
+#     python ET_Driver.py --aoi boundary.json
+
 
 
 # ## Setup Notebook
@@ -21,45 +24,17 @@
 # - geemap
 # - geopandas
 # - hdbscan
-# - ipympl (only for interactive charts with matplotlib)
-
-
-#!pip install earthengine-api
-#!pip install geemap
-#!pip install geopandas
-
 
 import argparse
 import sys
-
-import ee
-#ee.Authenticate() # Uncomment this line when first running the notebook in a new environment
-ee.Initialize()
-#import geemap.foliumap as geemap
-
-import numpy as np
-import pandas as pd
-import json
-
-from sklearn import tree
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score
-
 import os
-import joblib
-from datetime import datetime
-from tqdm.notebook import tqdm
-
-import matplotlib.pyplot as plt
-import seaborn as sns
+import glob
 
 # custom libraries
-import utils
 import ET_EDA as eda
 import ET_Featurization as feat
 import ET_Train_RF as trainRF
-
+import utils
 
 def run(aoi=None,
         datafile=None,
@@ -79,8 +54,9 @@ def run(aoi=None,
             print('Error: Valid AOI input file required')
             exit()
 
-        pass
-        print('Extract Step')
+        print('Extract Step - not yet implemented')
+        print('Use interactive notebook version')
+        exit()
         #datafile = extractET.retrieve(aoi, ...) # to be completed
         #datafile should be zipped and saved in inpath (raw data)
 
@@ -88,18 +64,20 @@ def run(aoi=None,
         print('Error: Valid input data file required')
         exit()
 
+    newpath = utils.setupOutputPaths(datafile, outpath)
+
     if (not no_eda):
         print('EDA Step')
-        eda.analyze(datafile=datafile, inpath=inpath, outpath=outpath, verbose=verbose)
+        eda.analyze(datafile=datafile, inpath=inpath, outpath=newpath, verbose=verbose)
 
     print('Featurization Step')
-    feat.generateFeatures(datafile=datafile, inpath=inpath, outpath=outpath,
+    feat.generateFeatures(datafile=datafile, inpath=inpath, outpath=newpath,
                     no_filter_ndvi=no_filter_ndvi, no_filter_rain=no_filter_rain)
 
     if not infer:
         print('Train Step')
         # requires setting inpath=outpath
-        trainRF.fit(datafile=datafile, inpath=outpath, outpath=outpath,
+        trainRF.fit(datafile=datafile, inpath=outpath, outpath=newpath,
                     no_filter_ndvi=no_filter_ndvi, no_filter_rain=no_filter_rain,
                     calc_ET_region=calc_ET_region, no_save_model=no_save_model)
 

@@ -15,13 +15,6 @@
 #
 #     1) Select the datafile to use (should be located at path ../raw_data/)
 
-#data_filename = 'ET_20220308_wesus8_WA.zip'
-#data_filename = 'ET_20220309_wesus9_CO.zip'
-#data_filename = 'ET_20220314_easus11_IL.zip'
-#data_filename = 'ET_20220315_wesus12_CA.zip'
-#data_filename = 'ET_20220317_wesus13_OR.zip'
-#data_filename = 'ET_20220318_wesus14_WA.zip'
-
 
 # ## Setup Notebook
 
@@ -69,11 +62,9 @@ def analyze(datafile=None,
         inpath='',
         outpath='',
         verbose=False):
-        
-    data_filename = datafile
 
     df = pd.DataFrame()
-    zf = ZipFile(inpath + data_filename)
+    zf = ZipFile(inpath + datafile)
     files = zf.filelist
     for file in tqdm(files):
         df = pd.concat([df, pd.read_csv(zf.open(file))], ignore_index=True)
@@ -81,21 +72,12 @@ def analyze(datafile=None,
     df = utils.baseETtransforms(df)
     df = utils.generateETlocationLabels(df)
 
-    out_foldername = data_filename.split('.')[0]
-    ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    path = outpath + out_foldername + '/'
-
-    if not os.path.exists(outpath):
-        os.mkdir(outpath)
-    if not os.path.exists(outpath+out_foldername):
-        os.mkdir(outpath+out_foldername)
-    if not os.path.exists(path):
-        os.mkdir(path)
+    path = utils.setupOutputPaths(datafile, outpath)
 
     # ## EDA
-
+    ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     out_stats = {
-        'dataname': out_foldername,
+        'dataname': datafile,
         'runtime': ts
     }
 
