@@ -214,9 +214,36 @@ def fit(datafile=None,
 
 
     # ## Save summary statistics
+    out_stats['exp_ref'] = path.split('/')[-2]
+
     filename = path + 'summary_stats.json'
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(out_stats, f, ensure_ascii=False, indent=4)
+
+
+    # ## Save best model
+
+    save_as_best = False
+    if save_model:
+        bestpath = '/'.join(path.split('/')[:-2]) + '/best/'
+        statsfilename = bestpath + 'summary_stats.json'
+        if not os.path.exists(bestpath):
+            os.mkdir(bestpath)
+            save_as_best = True
+
+        elif os.path.exists(statsfilename):
+            with open(statsfilename, 'r', encoding='utf-8') as f:
+                priorbest = json.load(f)
+
+            if out_stats['rf_f1'] > priorbest['rf_f1']:
+                save_as_best = True
+
+        if save_as_best:
+            # save summary stats
+            with open(statsfilename, 'w', encoding='utf-8') as f:
+                json.dump(out_stats, f, ensure_ascii=False, indent=4)
+
+            joblib.dump(classifier, bestpath + "model_rf.pkl", compress=3)
 
 
 def parse_opt():
