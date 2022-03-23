@@ -3,14 +3,18 @@
 
 
 import argparse
+import joblib
 import sys
 import os
 import glob
+import json
+import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
 
-# custom libraries
-import ET_Driver as driver
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import f1_score
+
 
 def eval(inpath='',
         outpath=''):
@@ -43,7 +47,7 @@ def eval(inpath='',
 
     for path_outer in tqdm(paths):
 
-        bestmodel_path = path_outer + 'best/'
+        bestmodel_path = path_outer + '/best/'
         bestmodel = joblib.load(bestmodel_path + "model_rf.pkl")
 
         with open(bestmodel_path + 'summary_stats.json', 'r', encoding='utf-8') as f:
@@ -53,27 +57,27 @@ def eval(inpath='',
         et_var = bestmodel_stats['et_var']
 
         for path_inner in tqdm(paths, leave=False):
-            testdatapath = path_inner + exp_ref + '/testdata.pkl'
-            df_test = pd.from_pickle(testdatapath)
+            testdatapath = path_inner +'/'+ exp_ref + '/testdata.pkl'
+            df_test = pd.read_pickle(testdatapath)
 
             if path_inner != path_outer:
-                traindatapath = path_inner + exp_ref + '/traindata.pkl'
-                df_train = pd.from_pickle(traindatapath)
+                traindatapath = path_inner +'/'+ exp_ref + '/traindata.pkl'
+                df_train = pd.read_pickle(traindatapath)
                 df_test = pd.concat([df_test, df_train])
 
             cols = [et_var, 'NDVI', 'LandT_G', 'last_rain', 'sum_precip_priorX', 'mm', 'yyyy', 'loc_idx', 'date']
             num_cols_rf = 6
 
-            X_test = df_test[cols[:num_cols]]
+            X_test = df_test[cols[:num_cols_rf]]
             y_test = df_test['true_label']
 
-            rf_accuracy.append(classifier.score(X_test, y_test))
+            rf_accuracy.append(bestmodel.score(X_test, y_test))
 
-            y_pred = classifier.predict(X_test_sub)
+            y_pred = bestmodel.predict(X_test)
             rf_f1.append(f1_score(y_test, y_pred, pos_label='Irrigated'))
 
-            evalmodelname.append(path_outer.split('/')[-2])
-            evaldataname.append(path_inner.split('/')[-2])
+            evalmodelname.append(path_outer.split('/')[-1])
+            evaldataname.append(path_inner.split('/')[-1])
             expref.append(bestmodel_stats['exp_ref'])
             filtndvi.append(bestmodel_stats['filter_ndvi'])
             filtrain.append(bestmodel_stats['filter_rain'])
@@ -95,7 +99,7 @@ def eval(inpath='',
     ts = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     outfilename = outpath + f'crosseval_{ts}.csv'
     df_results.to_csv(outfilename)
-    print('Saved results')
+    print('Results save to', outpath)
 
 
 def parse_opt():
