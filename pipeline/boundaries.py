@@ -28,26 +28,6 @@ california = geemap.geojson_to_ee('gz_2010_us_040_00_20m.json') \
                     .set('aoi_label', 'california')
 
 # these are custom-files made by copying geometries created on https://code.earthengine.google.com and printed to the console
-central_ca = ee.FeatureCollection(central_valley_california_g)\
-                .set('aoi_label', 'central_valley_california')
-
-az_rainfed = ee.FeatureCollection(az_rainfed_g)\
-                .set('aoi_label', 'az_rainfed')
-
-or_rainfed = ee.FeatureCollection(or_rainfed_g)\
-                .set('aoi_label', 'or_rainfed')
-
-ca_rainfed = ee.FeatureCollection(miscellaneous_aois.ca_rainfed_g)\
-                .set('aoi_label', 'ca_rainfed')
-
-bakersfield = ee.FeatureCollection(miscellaneous_aois.bakersfield_g)\
-                .set('aoi_label', 'bakersfield')
-
-southern_idaho = ee.FeatureCollection(miscellaneous_aois.southern_idaho_g)\
-                .set('aoi_label', 'southern_idaho')
-
-central_kansas = ee.FeatureCollection(miscellaneous_aois.central_kansas_g)\
-                .set('aoi_label', 'central_kansas')
 
 central_valley_california_g = ee.Geometry({
   "type": "Polygon",
@@ -822,3 +802,24 @@ southern_idaho_g = ee.Geometry({
     ]
   ]
 })
+
+central_ca = ee.FeatureCollection(central_valley_california_g)\
+                .set('aoi_label', 'central_valley_california')
+
+az_rainfed = ee.FeatureCollection(az_rainfed_g)\
+                .set('aoi_label', 'az_rainfed')
+
+or_rainfed = ee.FeatureCollection(or_rainfed_g)\
+                .set('aoi_label', 'or_rainfed')
+
+ca_rainfed = ee.FeatureCollection(miscellaneous_aois.ca_rainfed_g)\
+                .set('aoi_label', 'ca_rainfed')
+
+bakersfield = ee.FeatureCollection(miscellaneous_aois.bakersfield_g)\
+                .set('aoi_label', 'bakersfield')
+
+southern_idaho = ee.FeatureCollection(miscellaneous_aois.southern_idaho_g)\
+                .set('aoi_label', 'southern_idaho')
+
+central_kansas = ee.FeatureCollection(miscellaneous_aois.central_kansas_g)\
+                .set('aoi_label', 'central_kansas')
