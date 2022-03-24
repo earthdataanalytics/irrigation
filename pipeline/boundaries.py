@@ -1,4 +1,5 @@
 import ee
+import geemap
 # https://developers.google.com/earth-engine/datasets/catalog/USDOS_LSIB_SIMPLE_2017#table-schema
 # continents
 #     oceania not included due to number of polygons required
