@@ -812,14 +812,14 @@ az_rainfed = ee.FeatureCollection(az_rainfed_g)\
 or_rainfed = ee.FeatureCollection(or_rainfed_g)\
                 .set('aoi_label', 'or_rainfed')
 
-ca_rainfed = ee.FeatureCollection(miscellaneous_aois.ca_rainfed_g)\
+ca_rainfed = ee.FeatureCollection(ca_rainfed_g)\
                 .set('aoi_label', 'ca_rainfed')
 
-bakersfield = ee.FeatureCollection(miscellaneous_aois.bakersfield_g)\
+bakersfield = ee.FeatureCollection(bakersfield_g)\
                 .set('aoi_label', 'bakersfield')
 
-southern_idaho = ee.FeatureCollection(miscellaneous_aois.southern_idaho_g)\
+southern_idaho = ee.FeatureCollection(southern_idaho_g)\
                 .set('aoi_label', 'southern_idaho')
 
-central_kansas = ee.FeatureCollection(miscellaneous_aois.central_kansas_g)\
+central_kansas = ee.FeatureCollection(central_kansas_g)\
                 .set('aoi_label', 'central_kansas')
