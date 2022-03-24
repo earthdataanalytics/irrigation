@@ -31,6 +31,9 @@ california = geemap.geojson_to_ee('gz_2010_us_040_00_20m.json') \
 central_ca = ee.FeatureCollection(central_california.central_valley_california_g)\
                 .set('aoi_label', 'central_valley_california')
 
+az_rainfed = ee.FeatureCollection(az_rainfed_g)\
+                .set('aoi_label', 'az_rainfed')
+
 or_rainfed = ee.FeatureCollection(or_rainfed_g)\
                 .set('aoi_label', 'or_rainfed')
 
