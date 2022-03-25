@@ -815,7 +815,11 @@ southern_idaho = ee.FeatureCollection(southern_idaho_g)\
 central_kansas = ee.FeatureCollection(central_kansas_g)\
                 .set('aoi_label', 'central_kansas')
 
-manual_rainfed = ca_rainfed_g.geometries().cat(
-                        or_rainfed_g.geometries()).cat(
-                        az_rainfed_g.geometries()) \
-                   .map(lambda x: x.set('POINT_SRC', 'Manual'))
+manual_rainfed = ee.FeatureCollection(
+                    ca_rainfed_g.geometries().cat(
+                            or_rainfed_g.geometries()).cat(
+                            az_rainfed_g.geometries()) \
+                       .map(lambda x: ee.Feature(ee.Geometry(x)) \
+                                            .set('POINT_TYPE', 1) \
+                                            .set('POINT_SRC', 'Manual'))
+                )

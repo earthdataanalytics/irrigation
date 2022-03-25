@@ -1,6 +1,6 @@
 import ee
 import geemap
-import boundaries as bnd
+from pipeline import boundaries as bnd
 
 def getRawLabeledData():
     # irrMapper data
@@ -34,7 +34,7 @@ def retrieveSampleDatasetImageWest(start_yr, end_yr):
     # type conversions
     train = train.map(lambda x: x.set('POINT_TYPE', ee.Number.parse(
                                                           x.get('POINT_TYPE')
-                                                      )))
+                                                      ).toInt()))
     train = train.map(lambda x: x.set('YEAR', ee.Number.parse(
                                                     ee.Date(
                                                         ee.Number.parse(
@@ -43,6 +43,8 @@ def retrieveSampleDatasetImageWest(start_yr, end_yr):
                                                     ).format('YYYY')
                                                 )
                                         ))
+
+    val = val.map(lambda x: x.set('POINT_TYPE', ee.Number(x.get('POINT_TYPE')).toInt()))
 
     sample_data = train.merge(val) \
                        .select(['YEAR', 'POINT_TYPE', 'coordinates']) \
@@ -54,10 +56,7 @@ def retrieveSampleDatasetImageWest(start_yr, end_yr):
     # generate temporal samples (1 sample for each location for each year)
     manual_data = None
     for yr in range(start_yr, end_yr+1):
-        tmp = manual_labels.map(lambda x: ee.Feature(ee.Geometry(x)) \
-                                            .set('YEAR', yr) \
-                                            .set('POINT_TYPE', 1) \
-                                            .set('POINT_SRC', 'Manual'))
+        tmp = manual_labels.map(lambda x: x.set('YEAR', yr))
         if manual_data:
             manual_data = manual_data.merge(tmp)
         else:
@@ -114,8 +113,6 @@ def generateSampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=201
     # filters
     if aoi:
         sample_locations = sample_locations.filterBounds(aoi)
-    if year:
-        sample_locations = sample_locations.filter(ee.Filter.gte('YEAR', start_yr))
 
     # randomize
     sample_locations = sample_locations \
