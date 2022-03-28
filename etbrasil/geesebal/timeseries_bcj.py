@@ -248,6 +248,7 @@ class TimeSeries_bcj():
                 T_air_point_get = ee.Number(T_air_point.get(NAME_FINAL))
                 T_land_point_get = ee.Number(T_land_point.get(NAME_FINAL))#.subtract(ee.Number(273.15))
                                     # conversion from Kelvin to Celsius causes crash when LandT_G is None
+                                    # so this conversion was moved to client code
                 ux_point_get = ee.Number(ux_point.get(NAME_FINAL))
                 UR_point_get = ee.Number(UR_point.get(NAME_FINAL))
                 z_alt_point_get = ee.Number(z_alt_point.get(NAME_FINAL))
