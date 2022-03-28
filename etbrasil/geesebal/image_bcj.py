@@ -29,7 +29,7 @@ import ee
 from .masks import (
 f_cloudMaskL457_SR,f_cloudMaskL8_SR,
  f_albedoL5L7,f_albedoL8)
-from .meteorology import get_meteorology, retrievePrecip
+from .meteorology import get_meteorology, retrievePrecipImage
 from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat, fexp_sensible_heat_flux,
 fexp_sensible_heat_flux_bcj)
@@ -47,7 +47,11 @@ class Image_bcj():
                  NDVI_cold=5,
                  Ts_cold=20,
                  NDVI_hot=10,
-                 Ts_hot=20):
+                 Ts_hot=20,
+                 et_var='ET_24h',
+                 precip_window=10,
+                 cum_precip_window=3,
+              ):
 
         #GET INFORMATIONS FROM IMAGE
         self.image = ee.Image(image)
@@ -117,26 +121,27 @@ class Image_bcj():
             self.image=self.image.map(f_albedoL8)
 
         #GEOMETRY
-        self.geometryReducer=self.image.geometry().bounds().getInfo()
-        self.geometry_download=self.geometryReducer['coordinates']
+        self.geometryReducer=self.image.geometry().bounds()
         self.camada_clip=self.image.select('BRT').first()
 
         self.sun_elevation=ee.Number(90).subtract(self.azimuth_angle)
 
         #METEOROLOGY PARAMETERS
-        col_meteorology= get_meteorology(self.image,self.time_start);
+        self.image = ee.ImageCollection(self.image) \
+                        .map(get_meteorology) \
+                        .first()
 
         #AIR TEMPERATURE [C]
-        self.T_air = col_meteorology.select('AirT_G');
+        self.T_air = self.image.select('AirT_G');
 
         #WIND SPEED [M S-1]
-        self.ux= col_meteorology.select('ux_G');
+        self.ux= self.image.select('ux_G');
 
         #RELATIVE HUMIDITY [%]
-        self.UR = col_meteorology.select('RH_G');
+        self.UR = self.image.select('RH_G');
 
         #NET RADIATION 24H [W M-2]
-        self.Rn24hobs = col_meteorology.select('Rn24h_G');
+        self.Rn24hobs = self.image.select('Rn24h_G');
 
         #SRTM DATA ELEVATION
         SRTM_ELEVATION ='USGS/SRTMGL1_003'
@@ -145,21 +150,20 @@ class Image_bcj():
         self.slope = ee.Terrain.slope('elevation');
 
         #GET IMAGE
-        self.image=self.image.first()
+        #self.image=self.image.first()
 
         #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
         self.image=fexp_spec_ind(self.image)
 
         #LAND SURFACE TEMPERATURE
         self.image=LST_DEM_correction(self.image, self.z_alt, self.T_air, self.UR,self.sun_elevation,self._hour,self._minuts)
-        T_land = self.image.select('T_LST_DEM').rename('LandT_G')
-        self.image = self.image.addBands(T_land)
+        self.LandT_G = self.image.select('T_LST_DEM').rename('LandT_G')
 
         #COLD PIXEL
         self.d_cold_pixel=fexp_cold_pixel(self.image, self.geometryReducer, self.p_top_NDVI, self.p_coldest_Ts)
 
         #COLD PIXEL NUMBER
-        self.n_Ts_cold = ee.Number(self.d_cold_pixel.get('temp').getInfo())
+        self.n_Ts_cold = ee.Number(self.d_cold_pixel.get('temp'))#.getInfo())
 
         #INSTANTANEOUS OUTGOING LONG-WAVE RADIATION [W M-2]
         self.image=fexp_radlong_up(self.image)
@@ -186,18 +190,24 @@ class Image_bcj():
         #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
         self.image=fexp_et(self.image,self.Rn24hobs)
 
-
         #PRECIPITATION RETRIEVAL AND CALCULATIONS
-        self.image=retrievePrecip(self.image)
-#        self.image=calcLastRain(self.image)
-#        self.image=sumCumPrecip(self.image)
+        self.last_rain, self.cum_precip = retrievePrecipImage(self.date_string,
+                                                              self.image,
+                                                              precip_window=precip_window,
+                                                              cum_precip_window=cum_precip_window)
 
+        # Month
+        self.mm = ee.Image(ee.Number.parse(self._date.format('MM'))).rename('mm')
 
         #PREPARE OUTPUT IMAGE
-#        self.NAME_FINAL=self.LANDSAT_ID[:5]+self.LANDSAT_ID[10:17]+self.LANDSAT_ID[17:25]
-#        self.image=self.image.addBands([self.image.select('ET_24h').rename(et_var),
-#                                        self.image.select('NDVI'),
-#                                        self.image.select('LandT_G'),
-#                                        self.image.select('last_rain',
-#                                        )
-#          ])
+        self.image=self.image.addBands([self.image.select('ET_24h').rename(et_var),
+                                        self.image.select('NDVI'),
+                                        self.LandT_G,
+                                        self.last_rain,
+                                        self.cum_precip,
+                                        self.mm,
+          ])
+
+        self.image = self.image.select([et_var, 'NDVI', 'LandT_G',
+                                        'last_rain', 'sum_precip_priorX',
+                                        'mm'])

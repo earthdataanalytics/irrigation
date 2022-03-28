@@ -12,6 +12,12 @@
 #CONTACT US: leonardo.laipelt@ufrgs.br
 
 #----------------------------------------------------------------------------------------#
+#
+# Customized by bjonesneu@berkeley.edu, bjonesneu@gmail.com in March 2022
+#   - retrieve precipitation data
+#   - check for existence of weather data
+#   - Converted to run all code on GEE Server instead of Client
+#
 #----------------------------------------------------------------------------------------#
 #----------------------------------------------------------------------------------------#
 
@@ -229,6 +235,118 @@ def retrievePrecip(metadate, location, window_days=10):
                   .sort('date', opt_ascending=False)
 
     return precip_ts.aggregate_array('precip_value')
+
+def retrievePrecipitationImage(metadate, location, window_days=10):
+    # this method is intended to be used separately from the generalized ETandMeteo method
+    # goal being to speed up the data retrieval
+    startDate = ee.Date(metadate).advance(-window_days, 'day')
+    endDate = ee.Date(metadate).advance(-1, 'day')
+
+    collection = ee.ImageCollection("NOAA/CFSV2/FOR6H")
+
+    # function to sum the values by day
+    def sumPrecip(dayOffset, start_):
+        start = start_.advance(dayOffset, 'days')
+        end = start.advance(1, 'days')
+        return collection.select('Precipitation_rate_surface_6_Hour_Average') \
+                      .filterDate(start, end) \
+                      .sum() \
+                      .set('system:time_start', start.millis())
+
+    # function to extract the precipitation values
+    def extractPrecip(image):
+        # convert from kg/m^2/s to mm/s over 6 hours
+        precip_conversion_factor = ee.Number(6 * 60 * 60) # num hours in sample * num mins * num secs
+
+        precip_value = image.select('Precipitation_rate_surface_6_Hour_Average').reduceRegion(
+          reducer=ee.Reducer.first(),
+          geometry=location.centroid(),
+          scale=ee.Number(image.projection().nominalScale())
+        ).get('Precipitation_rate_surface_6_Hour_Average')
+        precip_value = ee.Number(precip_value)
+
+        return ee.Feature(None, {
+          'precip_value': precip_value.multiply(precip_conversion_factor),
+          'date': image.date().format('yyyy-MM-dd'),
+          'system:time_start': image.date().millis()
+        })
+
+    # create a list of dates to use to extract precip values
+    numberOfDays = endDate.difference(startDate, 'days')
+    daily = ee.ImageCollection(
+                        ee.List.sequence(0, numberOfDays) \
+                            .map(lambda x: sumPrecip(x, startDate))
+                    )
+
+    # calculate the total precipitation for each of prior X days
+    # extract as features
+    precip_ts = ee.FeatureCollection(daily.map(extractPrecip)) \
+                  .sort('date', opt_ascending=False)
+
+    out = ee.Feature(location, {
+                            'date': ee.Date(metadate),
+                            'precip': precip_ts.aggregate_array('precip_value')
+                        })
+
+    return out
+
+def retrievePrecipImage(metadate, image, precip_window=10, cum_precip_window=3):
+    # this method is intended to be used separately from the generalized ETandMeteo method
+    # goal being to speed up the data retrieval
+    startDate = ee.Date(metadate).advance(-precip_window, 'day')
+    endDate = ee.Date(metadate).advance(-1, 'day')
+
+    collection = ee.ImageCollection("NOAA/CFSV2/FOR6H") \
+                    .filterBounds(image.geometry().bounds())
+
+    # function to sum the values by day
+    def sumPrecip(dayOffset, start_):
+        precip_conversion_factor = ee.Image(6 * 60 * 60) # num hours in sample * num mins * num secs
+        start = start_.advance(dayOffset, 'days')
+        end = start.advance(1, 'days')
+        return collection.select('Precipitation_rate_surface_6_Hour_Average') \
+                      .filterDate(start, end) \
+                      .sum() \
+                      .multiply(precip_conversion_factor) \
+                      .rename('daily_rain') \
+                      .set('system:time_start', start.millis()) \
+                      .set('custom:index', (ee.Number(precip_window).subtract(dayOffset)))
+
+    # create a list of dates to use to extract precip values
+    numberOfDays = endDate.difference(startDate, 'days')
+    daily = ee.ImageCollection(
+                        ee.List.sequence(0, numberOfDays) \
+                            .map(lambda x: sumPrecip(x, startDate))
+                    )
+
+    def maskLowPrecip(img):
+        # creates image from difference between retrieval
+        # date (metadate) and the daily-precip reading date (img)
+        # then creates mask where rain less than threshold
+        # outer function then takes minimum # days (since last rain)
+        rain_threshold = ee.Number(0.254) # 0.254 mm = 0.01 inches of rainfall in a day, source:  Paolo
+        img = ee.Image(img)
+        delta = ee.Date(metadate).difference(img.date(), 'day')
+        mask = img.gt(rain_threshold)
+        out = ee.Image(delta).toFloat().updateMask(mask)
+        ten = ee.Image(ee.Number(10))
+        return out.unmask(ten)
+
+    # number of days since last rain
+    last_rain = daily \
+                    .map(maskLowPrecip) \
+                    .min() \
+                    .rename('last_rain') \
+                    .clip(image.geometry().bounds())
+
+    # cumulative precipation of last 3 days (agreed in team meeting)
+    cum_precip = daily \
+                    .limit(cum_precip_window, 'custom:index') \
+                    .sum() \
+                    .rename('sum_precip_priorX') \
+                    .clip(image.geometry().bounds())
+
+    return last_rain, cum_precip
 
 if __name__ == "__main__":
     get_meteorology()

@@ -1,4 +1,6 @@
 import ee
+import geemap
+import numpy as np
 
 def createMODISmask(aoi=None):
     sample_img = ee.ImageCollection('MODIS/006/MCD12Q1') \
