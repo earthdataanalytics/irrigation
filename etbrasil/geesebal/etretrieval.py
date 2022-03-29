@@ -51,10 +51,10 @@ def retrieveETandMeteo(
 
     #GET INFORMATIONS FROM IMAGE
     image = ee.Image(image)
-    _index=image.get('system:index')
+    _index=ee.String(image.get('system:index'))
     cloud_cover=image.get('CLOUD_COVER')
-    LANDSAT_ID=image.get('LANDSAT_ID').getInfo()
-    landsat_version=image.get('SATELLITE').getInfo()
+    LANDSAT_ID=image.get('LANDSAT_ID')
+    landsat_version=image.get('SATELLITE')
     azimuth_angle=image.get('SOLAR_ZENITH_ANGLE')
     time_start=image.get('system:time_start')
     _date=ee.Date(time_start)
@@ -65,7 +65,7 @@ def retrieveETandMeteo(
     _minuts = ee.Number(_date.get('minutes'))
     crs = image.projection().crs()
     transform = ee.List(ee.Dictionary(ee.Algorithms.Describe(image.projection())).get('transform'))
-    date_string=_date.format('YYYY-MM-dd').getInfo()
+    date_string=_date.format('YYYY-MM-dd')
 
     #ENDMEMBERS
     p_top_NDVI=ee.Number(NDVI_cold)
@@ -76,7 +76,7 @@ def retrieveETandMeteo(
     #LANDSAT IMAGE
     if landsat_version == 'LANDSAT_5':
          image=image.select([0,1,2,3,4,5,6,9], ["B","GR","R","NIR","SWIR_1","BRT","SWIR_2", "pixel_qa"])
-         image_toa=ee.Image('LANDSAT/LT05/C01/T1/'+ _index.getInfo())
+         image_toa=ee.Image(ee.String('LANDSAT/LT05/C01/T1/').cat(_index))
 
      #GET CALIBRATED RADIANCE
          col_rad = ee.Algorithms.Landsat.calibratedRadiance(image_toa);
@@ -90,7 +90,7 @@ def retrieveETandMeteo(
 
     elif landsat_version == 'LANDSAT_7':
          image=image.select([0,1,2,3,4,5,6,9], ["B","GR","R","NIR","SWIR_1","BRT","SWIR_2", "pixel_qa"])
-         image_toa=ee.Image('LANDSAT/LE07/C01/T1/'+ _index.getInfo())
+         image_toa=ee.Image(ee.String('LANDSAT/LE07/C01/T1/').cat(_index))
 
      #GET CALIBRATED RADIANCE
          col_rad = ee.Algorithms.Landsat.calibratedRadiance(image_toa);
@@ -104,7 +104,7 @@ def retrieveETandMeteo(
 
     else:
         image = image.select([0,1,2,3,4,5,6,7,10],["UB","B","GR","R","NIR","SWIR_1","SWIR_2","BRT","pixel_qa"])
-        image_toa=ee.Image('LANDSAT/LC08/C01/T1/'+_index.getInfo())
+        image_toa=ee.Image(ee.String('LANDSAT/LC08/C01/T1/').cat(_index))
 
      #GET CALIBRATED RADIANCE
         col_rad = ee.Algorithms.Landsat.calibratedRadiance(image_toa)
@@ -180,7 +180,7 @@ def retrieveETandMeteo(
     d_hot_pixel=fexp_hot_pixel(image, geometryReducer,p_lowest_NDVI, p_hottest_Ts)
 
     #SENSIBLE HEAT FLUX (H) [W M-2]
-    image=fexp_sensible_heat_flux(image, ux, UR,Rn24hobs,n_Ts_cold,
+    image=fexp_sensible_heat_flux_bcj(image, ux, UR,Rn24hobs,n_Ts_cold,
                                        d_hot_pixel, date_string,geometryReducer)
 
     #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
@@ -188,24 +188,25 @@ def retrieveETandMeteo(
 
     #PRECIPITATION RETRIEVAL AND CALCULATIONS
     last_rain, cum_precip = retrievePrecipImage(date_string,
-                                                          image,
-                                                          precip_window=precip_window,
-                                                          cum_precip_window=cum_precip_window)
+                                                image,
+                                                precip_window=precip_window,
+                                                cum_precip_window=cum_precip_window)
 
-    # Month
+    # Date bands
     mm = ee.Image(ee.Number.parse(_date.format('MM'))).rename('mm')
+    dd = ee.Image(ee.Number.parse(_date.format('dd'))).rename('dd')
+    yyyy = ee.Image(ee.Number.parse(_date.format('YYYY'))).rename('yyyy')
 
     #PREPARE OUTPUT IMAGE
     image=image.addBands([image.select('ET_24h').rename(et_var),
-                                    image.select('NDVI'),
-                                    LandT_G,
-                                    last_rain,
-                                    cum_precip,
-                                    mm,
+                          image.select('NDVI'), LandT_G,
+                          last_rain, cum_precip,
+                          mm, dd,
+                          yyyy
       ])
 
-    image = image.select([et_var, 'NDVI', 'LandT_G',
-                                    'last_rain', 'sum_precip_priorX',
-                                    'mm'])
-
-    return image
+    cols = [et_var, 'NDVI', 'LandT_G',
+            'last_rain', 'sum_precip_priorX',
+            'mm', 'dd',
+            'yyyy']
+    return image.select(cols)

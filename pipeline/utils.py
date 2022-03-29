@@ -2,6 +2,8 @@ import pandas as pd
 import json
 import glob
 import os
+import ee
+import geemap
 
 def setupOutputPaths(datafile, outpath):
     if not os.path.exists(outpath):
@@ -64,3 +66,10 @@ def generateETlocationLabels(df):
 
     df.drop(['loc_idx_tmp'], axis=1, inplace=True)
     return df
+
+def train_test_split(data_fc):
+    split = 0.8
+    with_random = data_fc.randomColumn('random', 112358)
+    train_partition = with_random.filter(ee.Filter.lt('random', split))
+    test_partition = with_random.filter(ee.Filter.gte('random', split))
+    return dict(train_partition=train_partition, test_partition=test_partition)
