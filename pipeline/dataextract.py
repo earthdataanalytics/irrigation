@@ -2,7 +2,7 @@ import ee
 from tqdm import tqdm
 
 from etbrasil.geesebal import TimeSeries_bcj
-import cropmasks as msk
+from pipeline import cropmasks as msk
 
 def exportETdata(etFC, lbl, loc, folder='irrigation'):
     filename = 'et_TS_' + lbl + '_' + loc
