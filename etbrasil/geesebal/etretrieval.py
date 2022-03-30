@@ -47,6 +47,7 @@ def retrieveETandMeteo(
                  et_var='ET_24h',
                  precip_window=10,
                  cum_precip_window=3,
+                 aoi=None
               ):
 
     #GET INFORMATIONS FROM IMAGE
@@ -126,6 +127,8 @@ def retrieveETandMeteo(
     image = ee.ImageCollection(image) \
                     .map(get_meteorology) \
                     .first()
+    if aoi:
+        image = image.clip(aoi)
 
     #AIR TEMPERATURE [C]
     T_air = image.select('AirT_G');

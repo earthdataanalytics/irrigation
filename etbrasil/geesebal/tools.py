@@ -1,4 +1,4 @@
-﻿#----------------------------------------------------------------------------------------#
+#----------------------------------------------------------------------------------------#
 #---------------------------------------//GEESEBAL//-------------------------------------#
 #GEESEBAL - GOOGLE EARTH ENGINE APP FOR SURFACE ENERGY BALANCE ALGORITHM FOR LAND (SEBAL)
 #CREATE BY: LEONARDO LAIPELT, RAFAEL KAYSER, ANDERSON RUHOFF AND AYAN FLEISCHMANN
@@ -79,7 +79,7 @@ def fexp_spec_ind(image):
     #RESCALED BRIGHTNESS TEMPERATURE
     brt_r = image.select('BRT').divide(10).rename('BRT_R');
     proj = image.select('B').projection();
-    latlon = ee.Image.pixelLonLat().reproject(proj);
+    latlon = ee.Image.pixelLonLat().reproject(proj, scale=30);
     coords = latlon.select(['longitude', 'latitude']);
 
     #FOR FUTHER USE
@@ -235,7 +235,7 @@ def LST_DEM_correction(image, z_alt, T_air, UR,SUN_ELEVATION,hour,minuts):
         ea = es.multiply(UR).divide(100).rename('EA')
     except:
         raise
-        
+
     #WATER IN THE ATMOSPHERE [mm]
     #Garrison and Adler (1990)
     W = image.expression(
@@ -823,7 +823,7 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
     z1= ee.Number(0.1)
     z2= ee.Number(2)
     i_rah = i_ufric.expression(
-      '(log(z2/z1))/(i_ufric*0.41)', {
+            '(log(z2/z1))/(i_ufric*0.41)', {
               'z2' : z2,
               'z1': z1,
               'i_ufric':i_ufric }).rename('rah')
@@ -833,88 +833,77 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
     #AIR DENSITY HOT PIXEL
     n_ro_hot= (ee.Number(-0.0046).multiply(n_Ts_hot)).add(ee.Number(2.5538))
 
-    #========ITERATIVE PROCESS=========#
-
     #SENSIBLE HEAT FLUX AT THE HOT PIXEL (H_hot)
     n_H_hot = ee.Number(n_Rn_hot).subtract(ee.Number(n_G_hot))
 
     #ITERATIVE VARIABLES
     n= ee.Number(1)
-    n_dif= ee.Number(1)
-    n_dif_min = ee.Number(0.1)
-    list_dif = ee.List([])
-    list_dT_hot = ee.List([])
-    list_rah_hot = ee.List([])
-    list_coef_a = ee.List([])
-    list_coef_b = ee.List([])
+
+    #NEAR SURFACE TEMPERATURE DIFFERENCE IN COLD PIXEL (dT= tZ1-tZ2)
+    n_dT_cold = ee.Number(0)
+
+    i_lst_med = image.select('T_LST_DEM')
+
+    #STABILITY CORRECTIONS FOR MOMENTUM AND HEAT TRANSPORT, PAULSON (1970), WEBB (1970)
+    img = ee.Image().clip(refpoly)
 
     #NUMBER OF ITERATIVE STEPS: 15
     #CAN BE CHANGED, BUT BE AWARE THAT
     #A MINIMUM NUMBER OF ITERATIVE PROCESSES
     #IS NECESSARY TO ACHIEVE RAH AND H ESTIMATIONS
 
+    #========ITERATIVE PROCESS=========#
+
     #========INIT ITERATION========#
     for n in range(15):
 
-    #AERODYNAMIC RESISTANCE TO HEAT TRANSPORT
-    #IN HOT PIXEL
+        #AERODYNAMIC RESISTANCE TO HEAT TRANSPORT IN HOT PIXEL
+        # BCJ-can decrease maxpixels? what buffersize needed?
         d_rah_hot = i_rah.reduceRegion(
             reducer= ee.Reducer.first(),
             geometry= p_hot_pix,
             scale= 30,
-            maxPixels=9000000000)
+            maxPixels=5556) # 5556 pixels * 900 sqm / pixel = 5e6 sqm = 5 sq km
+            # maxPixels = 9000000000) # original
 
-        n_rah_hot =   ee.Number(d_rah_hot.get('rah'))
+        n_rah_hot = ee.Number(d_rah_hot.get('rah'))
 
-    #NEAR SURFACE TEMPERATURE DIFFERENCE IN HOT PIXEL (dT= Tz1-Tz2)  [K]
-    # dThot= Hhot*rah/(ρCp)
+        #NEAR SURFACE TEMPERATURE DIFFERENCE IN HOT PIXEL (dT= Tz1-Tz2)  [K] dThot= Hhot*rah/(ρCp)
         n_dT_hot = (n_H_hot.multiply(n_rah_hot)).divide(n_ro_hot.multiply(n_Cp))
 
-    #NEAR SURFACE TEMPERATURE DIFFERENCE IN COLD PIXEL (dT= tZ1-tZ2)
-        n_dT_cold = ee.Number(0)
-    # dT =  aTs + b
-    #ANGULAR COEFFICIENT
+        #ANGULAR COEFFICIENT
         n_coef_a = (n_dT_cold.subtract(n_dT_hot)).divide(n_Ts_cold.subtract(n_Ts_hot))
 
-    #LINEAR COEFFICIENT
+        #LINEAR COEFFICIENT
         n_coef_b = n_dT_hot.subtract(n_coef_a.multiply(n_Ts_hot))
 
-    #dT FOR EACH PIXEL [K]
-        i_lst_med = image.select('T_LST_DEM')
-        i_dT_int = ee.Image(0).clip(refpoly).expression(
+        #dT FOR EACH PIXEL [K]
+        i_dT_int = ee.Image().clip(refpoly).expression(
             '(n_coef_a * i_lst_med) + n_coef_b', {
             'n_coef_a' : n_coef_a,
             'n_coef_b': n_coef_b,
             'i_lst_med':i_lst_med }).rename('dT')
 
-    #AIR TEMPERATURE (TA) FOR EACH PIXEL (TA=TS-dT) [K]
+        #AIR TEMPERATURE (TA) FOR EACH PIXEL (TA=TS-dT) [K]
         i_Ta = i_lst_med.expression(
             'i_lst_med - i_dT_int', {
             'i_lst_med' : i_lst_med,
             'i_dT_int': i_dT_int})
 
-    #AIR DENSITY (ro) [KM M-3]
+        #AIR DENSITY (ro) [KM M-3]
         i_ro = i_Ta.expression(
-    '(-0.0046 * i_Ta) + 2.5538', {
+            '(-0.0046 * i_Ta) + 2.5538', {
             'i_Ta' : i_Ta}).rename('ro')
 
-    #SENSIBLE HEAT FLUX (H) FOR EACH PIXEL  [W M-2]
+        #SENSIBLE HEAT FLUX (H) FOR EACH PIXEL  [W M-2]
         i_H_int = i_dT_int.expression(
-      '(i_ro*n_Cp*i_dT_int)/i_rah', {
+            '(i_ro*n_Cp*i_dT_int)/i_rah', {
               'i_ro' : i_ro,
               'n_Cp': n_Cp,
               'i_dT_int':i_dT_int,
               'i_rah':i_rah }).rename('H')
-    #GET VALUE
-        d_H_int = i_H_int.reduceRegion(
-            reducer= ee.Reducer.first(),
-           geometry= p_hot_pix,
-            scale= 30,
-            maxPixels=9000000000)
-        n_H_int =   ee.Number(d_H_int.get('H'))
 
-    #MONIN-OBUKHOV LENGTH (L)
-    #FOR STABILITY CONDITIONS OF THE ATMOSPHERE IN THE ITERATIVE PROCESS
+        #MONIN-OBUKHOV LENGTH (L) - FOR STABILITY CONDITIONS OF THE ATMOSPHERE IN THE ITERATIVE PROCESS
         i_L_int = i_dT_int.expression(
                 '-(i_ro*n_Cp*(i_ufric**3)*i_lst_med)/(0.41*9.81*i_H_int)',
                 {'i_ro' : i_ro,
@@ -923,12 +912,7 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
                  'i_lst_med':i_lst_med,
                  'i_H_int':i_H_int }).rename('L')
 
-    #STABILITY CORRECTIONS FOR MOMENTUM AND HEAT TRANSPORT
-    #PAULSON (1970)
-    #WEBB (1970)
-        img = ee.Image(0).clip(refpoly)
-
-    #STABILITY CORRECTIONS FOR STABLE CONDITIONS
+        #STABILITY CORRECTIONS FOR STABLE CONDITIONS
         i_psim_200 = img.expression(
                 '-5*(hight/i_L_int)', {'hight' : ee.Number(200),'i_L_int': i_L_int}).rename('psim_200')
         i_psih_2 = img.expression(
@@ -936,7 +920,7 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
         i_psih_01 = img.expression(
                 '-5*(hight/i_L_int)',{'hight' : ee.Number(0.1),'i_L_int': i_L_int}).rename('psih_01')
 
-    #FOR DIFFERENT HEIGHT
+        #FOR DIFFERENT HEIGHT
         i_x200 = i_L_int.expression(
                 '(1-(16*(hight/i_L_int)))**0.25',
                 {'hight' : ee.Number(200),'i_L_int': i_L_int}).rename('i_x200')
@@ -947,7 +931,7 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
                 '(1-(16*(hight/i_L_int)))**0.25',
                 {'hight' : ee.Number(0.1),'i_L_int': i_L_int})
 
-    #STABILITY CORRECTIONS FOR UNSTABLE CONDITIONS
+        #STABILITY CORRECTIONS FOR UNSTABLE CONDITIONS
         i_psimu_200 = i_x200.expression(
                 '2*log((1+i_x200)/2)+log((1+i_x200**2)/2)-2*atan(i_x200)+0.5*pi',
                 {'i_x200' : i_x200,'pi': ee.Number(3.14159265)})
@@ -958,24 +942,18 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
                 '2*log((1+i_x01**2)/2)',
                 {'i_x01' : i_x01})
 
-    #FOR EACH PIXEL
-        i_psim_200 = i_psim_200.where(i_L_int.lt(0), i_psimu_200)
-        i_psih_2 = i_psih_2.where(i_L_int.lt(0), i_psihu_2)
-        i_psih_01 = i_psih_01.where(i_L_int.lt(0), i_psihu_01)
-        i_psim_200 = i_psim_200.where(i_L_int.eq(0), 0)
-        i_psih_2 = i_psih_2.where(i_L_int.eq(0), 0);
-        i_psih_01 = i_psih_01.where(i_L_int.eq(0), 0)
+        #FOR EACH PIXEL
+        i_L_int_lt0 = i_L_int.lt(0)
+        i_psim_200 = i_psim_200.where(i_L_int_lt0, i_psimu_200)
+        i_psih_2 = i_psih_2.where(i_L_int_lt0, i_psihu_2)
+        i_psih_01 = i_psih_01.where(i_L_int_lt0, i_psihu_01)
 
-        if n==1:
-            i_psim_200_exp = i_psim_200
-            i_psih_2_exp = i_psih_2
-            i_psih_01_exp = i_psih_01
-            i_L_int_exp = i_L_int
-            i_H_int_exp = i_H_int
-            i_dT_int_exp = i_dT_int
-            i_rah_exp = i_rah
+        i_L_int_eq0 = i_L_int.eq(0)
+        i_psim_200 = i_psim_200.where(i_L_int_eq0, 0)
+        i_psih_2 = i_psih_2.where(i_L_int_eq0, 0);
+        i_psih_01 = i_psih_01.where(i_L_int_eq0, 0)
 
-    #CORRECTED VALUE FOR THE FRICTION VELOCITY (i_ufric) [M S-1]
+        #CORRECTED VALUE FOR THE FRICTION VELOCITY (i_ufric) [M S-1]
         i_ufric = i_ufric.expression(
                 '(u200*0.41)/(log(hight/i_zom)-i_psim_200)',{
                  'u200' : i_u200,
@@ -983,30 +961,10 @@ def fexp_sensible_heat_flux_bcj(image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel,
                  'i_zom':i_zom,
                  'i_psim_200': i_psim_200}).rename('ufric_star')
 
-    #CORRECTED VALUE FOR THE AERODYNAMIC RESISTANCE TO THE HEAT TRANSPORT (rah) [S M-1]
+        #CORRECTED VALUE FOR THE AERODYNAMIC RESISTANCE TO THE HEAT TRANSPORT (rah) [S M-1]
         i_rah = i_rah.expression(
                 '(log(z2/z1)-psi_h2+psi_h01)/(i_ufric*0.41)',
                 {'z2' : z2,'z1': z1, 'i_ufric':i_ufric, 'psi_h2':i_psih_2, 'psi_h01':i_psih_01}).rename('rah')
-        if n==1:
-            n_dT_hot_old = n_dT_hot
-            n_rah_hot_old = n_rah_hot
-            n_dif = ee.Number(1)
-
-        if n > 1:
-            n_dT_hot_abs = n_dT_hot.abs()
-            n_dT_hot_old_abs = n_dT_hot_old.abs()
-            n_rah_hot_abs = n_rah_hot.abs()
-            n_rah_hot_old_abs = n_rah_hot_old.abs()
-            n_dif=(n_dT_hot_abs.subtract(n_dT_hot_old_abs).add(n_rah_hot_abs).subtract(n_rah_hot_old_abs)).abs()
-            n_dT_hot_old = n_dT_hot
-            n_rah_hot_old = n_rah_hot
-
-        #INSERT EACH ITERATION VALUE INTO A LIST
-        list_dif = list_dif.add(n_dif);
-        list_coef_a = list_coef_a.add(n_coef_a)
-        list_coef_b = list_coef_b.add(n_coef_b)
-        list_dT_hot = list_dT_hot.add(n_dT_hot)
-        list_rah_hot = list_rah_hot.add(n_rah_hot)
 
     #=========END ITERATION =========#
 
