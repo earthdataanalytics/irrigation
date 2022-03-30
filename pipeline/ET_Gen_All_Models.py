@@ -11,10 +11,15 @@ from tqdm import tqdm
 # custom libraries
 import ET_Driver as driver
 
-def run(inpath='',
+def run(datafile=None,
+        inpath='',
         outpath=''):
 
-    files = glob.glob(inpath+'*')
+    files = []
+    if datafile:
+        files.append(datafile)
+    else:
+        files = glob.glob(inpath+'*')
 
     ndvi_opt = [False, True]
     rain_opt = [False, True]
@@ -34,6 +39,7 @@ def run(inpath='',
 
 def parse_opt():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--datafile', required=False, help='Filename of ET data to process')
     parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
     return parser.parse_args()
