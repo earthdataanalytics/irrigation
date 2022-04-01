@@ -74,21 +74,26 @@ def extractData(aoi, aoi_label,
     print('Number of tasks launched =', cnt)
     return out
 
-def buildImageCollection(aoi, start, end, max_cloud=10, ls_all=False):
-    mask = msk.createGFSADmask(aoi)
+def buildImageCollection(aoi, start, end, max_cloud=10, ls5=False, ls7=False, ls_all=False):
+    # always returns LS8
+    cropmask = msk.createGFSADmask(aoi)
     def getImages(dataset):
         return ee.ImageCollection(dataset) \
                   .filterDate(start, end) \
                   .filter(ee.Filter.lt('CLOUD_COVER', max_cloud)) \
-                  .map(lambda x: x.updateMask(mask)) \
+                  .map(lambda x: x.updateMask(cropmask)) \
                   .filterBounds(aoi)
 
     imgcol8 = getImages('LANDSAT/LC08/C01/T1_SR')
     imgcol7 = getImages('LANDSAT/LE07/C01/T1_SR')
     imgcol5 = getImages('LANDSAT/LT05/C01/T1_SR')
 
-    if ls_all:
+    if ls_all or (ls5 and ls7):
         return imgcol8.merge(imgcol7).merge(imgcol5)
+    if ls7:
+        return imgcol8.merge(imgcol7)
+    if ls7:
+        return imgcol8.merge(imgcol5)
     return imgcol8
 
 def exportRaster(classified_image, type='unknown'):
