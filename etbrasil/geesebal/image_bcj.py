@@ -26,10 +26,11 @@ import ee
 #ee.Initialize()
 
 #FOLDERS
+from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate
 from .masks import (
 f_cloudMaskL457_SR,f_cloudMaskL8_SR,
  f_albedoL5L7,f_albedoL8)
-from .meteorology import get_meteorology, retrievePrecipImage
+from .meteorology import get_meteorology, retrievePrecipImage, verifyMeteoAvail
 from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat, fexp_sensible_heat_flux,
 fexp_sensible_heat_flux_bcj)
@@ -57,6 +58,9 @@ class Image_bcj():
                  cloud_max=10
               ):
 
+        #output variable
+        self.ETandMeteo = None
+
         #COLLECTIONS
         collection_l5=fexp_landsat_5Coordinate(window_start, window_end, aoi, cloud_max)
         collection_l7=fexp_landsat_7Coordinate(window_start, window_end, aoi, cloud_max)
@@ -65,21 +69,12 @@ class Image_bcj():
         def retrieveETandMeteo(image):
             #GET INFORMATIONS FROM IMAGE
             image = ee.Image(image)
-            _index=image.get('system:index')
-            cloud_cover=image.get('CLOUD_COVER')
-            LANDSAT_ID=image.get('LANDSAT_ID').getInfo()
-            landsat_version=image.get('SATELLITE').getInfo()
-            azimuth_angle=image.get('SOLAR_ZENITH_ANGLE')
+            zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
-            _year=ee.Number(_date.get('year'))
-            _month=ee.Number(_date.get('month'))
-            _day=ee.Number(_date.get('day'))
             _hour=ee.Number(_date.get('hour'))
             _minuts = ee.Number(_date.get('minutes'))
-            crs = image.projection().crs()
-            transform = ee.List(ee.Dictionary(ee.Algorithms.Describe(image.projection())).get('transform'))
-            date_string=_date.format('YYYY-MM-dd').getInfo()
+            date_string=_date.format('YYYY-MM-dd')
 
             #ENDMEMBERS
             p_top_NDVI=ee.Number(NDVI_cold)
@@ -89,9 +84,8 @@ class Image_bcj():
 
             #GEOMETRY
             geometryReducer=image.geometry().bounds()
-            camada_clip=image.select('BRT').first()
 
-            sun_elevation=ee.Number(90).subtract(azimuth_angle)
+            sun_elevation=ee.Number(90).subtract(zenith_angle)
 
             #AIR TEMPERATURE [C]
             T_air = image.select('AirT_G');
@@ -106,13 +100,9 @@ class Image_bcj():
             Rn24hobs = image.select('Rn24h_G');
 
             #SRTM DATA ELEVATION
-            SRTM_ELEVATION ='USGS/SRTMGL1_003'
-            srtm = ee.Image(SRTM_ELEVATION).clip(geometryReducer);
-            z_alt = srtm.select('elevation');
-            slope = ee.Terrain.slope('elevation');
-
-            #GET IMAGE
-            #image=image.first()
+            srtm = ee.Image('USGS/SRTMGL1_003').clip(geometryReducer)
+            z_alt = srtm.select('elevation')
+            slope = ee.Terrain.slope(z_alt)
 
             #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
             image=fexp_spec_ind(image)
@@ -125,7 +115,7 @@ class Image_bcj():
             d_cold_pixel=fexp_cold_pixel(image, geometryReducer, p_top_NDVI, p_coldest_Ts)
 
             #COLD PIXEL NUMBER
-            n_Ts_cold = ee.Number(d_cold_pixel.get('temp'))#.getInfo())
+            n_Ts_cold = ee.Number(d_cold_pixel.get('temp'))
 
             #INSTANTANEOUS OUTGOING LONG-WAVE RADIATION [W M-2]
             image=fexp_radlong_up(image)
@@ -146,7 +136,7 @@ class Image_bcj():
             d_hot_pixel=fexp_hot_pixel(image, geometryReducer,p_lowest_NDVI, p_hottest_Ts)
 
             #SENSIBLE HEAT FLUX (H) [W M-2]
-            image=fexp_sensible_heat_flux(image, ux, UR,Rn24hobs,n_Ts_cold,
+            image=fexp_sensible_heat_flux_bcj(image, ux, UR,Rn24hobs,n_Ts_cold,
                                                d_hot_pixel, date_string,geometryReducer)
 
             #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
@@ -182,7 +172,7 @@ class Image_bcj():
                             .filter(ee.Filter.gt('meteo_count', 0)) \
                             .map(get_meteorology) \
                             .map(retrieveETandMeteo)
-        imgcol = ic5
+        self.ETandMeteo = ic5
 
         ic7 = collection_l7.map(f_cloudMaskL457_SR) \
                             .map(f_albedoL5L7) \
@@ -190,7 +180,7 @@ class Image_bcj():
                             .filter(ee.Filter.gt('meteo_count', 0)) \
                             .map(get_meteorology) \
                             .map(retrieveETandMeteo)
-        imgcol = imgcol.merge(ic7)
+        self.ETandMeteo = self.ETandMeteo.merge(ic7)
 
         ic8 = collection_l8.map(f_cloudMaskL8_SR) \
                             .map(f_albedoL8) \
@@ -198,6 +188,4 @@ class Image_bcj():
                             .filter(ee.Filter.gt('meteo_count', 0)) \
                             .map(get_meteorology) \
                             .map(retrieveETandMeteo)
-        imgcol = imgcol.merge(ic8)
-
-        return imagecol
+        self.ETandMeteo = self.ETandMeteo.merge(ic8)
