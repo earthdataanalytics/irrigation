@@ -162,7 +162,9 @@ class Image_bcj():
 
             cols = [et_var, 'NDVI', 'LandT_G',
                     'last_rain', 'sum_precip_priorX',
-                    'mm', 'dd', 'yyyy']
+                    'mm', 'dd', 'yyyy',
+                    'R', 'GR', 'B',
+                ]
             return image.select(cols)
 
 
