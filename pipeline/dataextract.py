@@ -96,11 +96,8 @@ def buildImageCollection(aoi, start, end, max_cloud=10, ls5=False, ls7=False, ls
         return imgcol8.merge(imgcol5)
     return imgcol8
 
-def exportRaster(classified_image, type='unknown'):
+def exportRaster(classified_image, type='unknown', region=aoi, scale=30):
     snapshot_path_prefix = 'projects/eda-bjonesneu-proto/assets/irrigation/'
-    #model_projection = "EPSG:4326"
-    model_scale = 30
-
     date = classified_image.get('custom:date').getInfo()
     asset_description = f'{type}_{date}'
     asset_name = f'{snapshot_path_prefix}_{asset_description}'
@@ -109,8 +106,8 @@ def exportRaster(classified_image, type='unknown'):
         image=classified_image,
         description=asset_description,
         assetId=asset_name,
-        #crs=model_projection,
-        scale=model_scale,
+        scale=scale,
+        region=aoi,
         maxPixels=1e13,
     )
     task.start()
