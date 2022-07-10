@@ -1,6 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# ## Description
+
+# This notebook is used to run variations of different input parameters for
+# the end-to-end Irrigation Processing pipeline
+#
+# The SEBAL calculations for ET are leveraged from https://github.com/gee-hydro/geeSEBAL
+#
+# Usage:
+#
+# this will run the pipeline for all datafiles found in inpath
+#     python ET_Gen_All_Models.py --all
+# or
+#     python ET_Gen_All_Models.py --datafile ET_20220308_wesus8_WA.zip
 
 import argparse
 import sys

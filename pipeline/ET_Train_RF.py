@@ -43,7 +43,7 @@ import json
 
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score
 
 import os
@@ -121,6 +121,8 @@ def fit(datafile=None,
     cols = [et_var, 'NDVI', 'LandT_G', 'last_rain', 'sum_precip_priorX', 'mm', 'yyyy', 'loc_idx', 'date']
     num_cols_rf = 6
 
+    use_gridsearchcv = True
+
     # ##### Setup training/validation dataset
     train_val_data = df.dropna(subset=cols)
     out_stats['num_samples_train_total'] = int(len(train_val_data))
@@ -128,27 +130,47 @@ def fit(datafile=None,
     X = train_val_data[cols]
     y = train_val_data['type']
 
-    strat = train_val_data[['type']]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=strat)
+    if use_gridsearchcv:
+        X_train = X_test = X
+        y_train = y_test = y
+    else:
+        strat = train_val_data[['type']]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=strat)
 
-    out_stats['num_samples_train_irr'] = int(len(y_train[y_train == 'Irrigated']))
-    out_stats['num_samples_train_rain'] = int(len(y_train[y_train=='Rainfed']))
+        out_stats['num_samples_train_irr'] = int(len(y_train[y_train == 'Irrigated']))
+        out_stats['num_samples_train_rain'] = int(len(y_train[y_train=='Rainfed']))
 
-    out_stats['num_samples_test_irr'] = int((y_test == 'Irrigated').sum())
-    out_stats['num_samples_test_rain'] = int((y_test == 'Rainfed').sum())
+        out_stats['num_samples_test_irr'] = int((y_test == 'Irrigated').sum())
+        out_stats['num_samples_test_rain'] = int((y_test == 'Rainfed').sum())
 
     # ##### Create and train model
-    classifier = RandomForestClassifier()
+    clf = RandomForestClassifier()
+
+    if use_gridsearchcv:
+        # ##### Cross-Validation and GridSearch
+        param_grid = {
+                     'n_estimators': [10, 50, 100],
+                     'max_depth': [4, 8, None],
+                     'min_samples_split': [2, 4, 8],
+                     'min_samples_leaf': [1, 2, 4]
+                 }
+        classifier = GridSearchCV(clf, param_grid, scoring='f1', n_jobs=-1, cv=10) # uses Stratified k-fold
+
+    else:
+        classifier = clf
+
     classifier.fit(X_train[cols[:num_cols_rf]], y_train)
 
     # ##### Score model
     X_test_sub = X_test[cols[:num_cols_rf]]
-    out_stats['rf_accuracy'] = float(classifier.score(X_test_sub, y_test))
-
     y_pred = classifier.predict(X_test_sub)
-    f1_rf = f1_score(y_test, y_pred, pos_label='Irrigated')
-    out_stats['rf_f1'] = float(f1_rf)
 
+    if use_gridsearchcv:
+        out_stats['rf_f1'] = classifier.best_score_
+    else:
+        out_stats['rf_accuracy'] = float(classifier.score(X_test_sub, y_test))
+        f1_rf = f1_score(y_test, y_pred, pos_label='Irrigated')
+        out_stats['rf_f1'] = float(f1_rf)
 
     # ## Create plots
 
@@ -159,7 +181,7 @@ def fit(datafile=None,
 
     # ##### Decision Tree
     fig = plt.figure(figsize=(25,20))
-    dt_plot = tree.plot_tree(classifier.estimators_[0], feature_names=cols, class_names=y_test.unique(),
+    dt_plot = tree.plot_tree(classifier.best_estimator_, feature_names=cols, class_names=y_test.unique(),
                    max_depth=3, proportion=False, rounded=True, filled = True)
     plt.savefig(path + 'rf_tree.png')
     plt.clf()
@@ -173,7 +195,7 @@ def fit(datafile=None,
     plt.title('Histogram of False Negatives')
     plt.savefig(path + 'rf_hist_fn_by_loc.png')
 
-        # by month
+    # by month
     fn_plot = train_val_data.loc[false_neg_idx].sort_values('loc_idx').groupby('mm').count()[et_var].plot.bar()
     plt.title('Histogram of False Negatives')
     plt.savefig(path + 'rf_hist_fn_by_month.png')
