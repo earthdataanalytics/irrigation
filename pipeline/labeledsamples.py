@@ -135,19 +135,23 @@ def generateAnnualSampleLocations(aoi=None, aoi_label='', num_samples=10, start_
     return sample_locations
 
 def getRawMonthlyLabeledData():
-    def convertToFeature(label_item):
-        return ee.FeatureCollection(label_item['id'])
-
     def setCoords(item):
-        # long is index 0 in coordinates list, lat is index 1
+        # long is index 0 in coordinates list
+        # lat is index 1
         return item.set('coordinates', item.geometry().coordinates())
 
-    label_files = ee.data.listAssets('projects/eda-bjonesneu-proto/assets/irrigation/labels')
-    label_features = ee.List(label_files['assets'].map(convertToFeature))
-    sample_locations = ee.FeatureCollection(label_features).flatten() \
-                                .map(setCoords)
+    folder = 'projects/eda-bjonesneu-proto/assets/irrigation/labels'
+    label_files = ee.data.listAssets({'parent': folder})
 
-    return sample_locations
+    label_features = None
+    for item in label_files['assets']:
+        features = ee.FeatureCollection(item['id'])
+        if label_features:
+            label_features = label_features.merge(features)
+        else:
+            label_features = features
+
+    return label_features.map(setCoords)
 
 def generateMonthlySampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=2015, end_yr=2021):
     sample_locations_tmp = getRawMonthlyLabeledData()
