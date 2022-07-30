@@ -1,6 +1,7 @@
 import ee
 import geemap
 from pipeline import boundaries as bnd
+from pipeline import rainfed_labels as rain_labels
 
 def getRawLabeledData():
     # irrMapper data
@@ -51,7 +52,7 @@ def retrieveSampleDatasetImageWest(start_yr, end_yr):
                        .map(lambda x: x.set('POINT_SRC', 'IrrMapper'))
 
     # retrieve data that was manually labeled independent of time and generate temporal samples
-    manual_labels = bnd.manual_rainfed
+    manual_labels = rain_labels.manual_rainfed
 
     # generate temporal samples (1 sample for each location for each year)
     manual_data = None
