@@ -130,9 +130,9 @@ def fit(datafile=None,
     train_val_data.loc[train_val_data['type']=='Irrigated', 'type'] = 0
     train_val_data.loc[train_val_data['type']=='Rainfed', 'type'] = 1
 
-    print(train_val_data[(train_val_data['type'] != 0) && (train_val_data['type'] != 1)]])
     X = train_val_data[cols]
     y = train_val_data['type']
+    y = y.astype('int')
 
     if use_gridsearchcv:
         X_train = X_test = X
@@ -184,10 +184,11 @@ def fit(datafile=None,
     plt.savefig(path + 'rf_cm.png')
 
     # ##### Decision Tree
-    fig = plt.figure(figsize=(25,20))
-    dt_plot = tree.plot_tree(classifier.best_estimator_, feature_names=cols, class_names=y_test.unique(),
-                   max_depth=3, proportion=False, rounded=True, filled = True)
-    plt.savefig(path + 'rf_tree.png')
+    if not use_gridsearchcv: # causes crash
+        fig = plt.figure(figsize=(25,20))
+        dt_plot = tree.plot_tree(classifier.best_estimator_.estimators_[0], feature_names=cols, class_names=y_test.unique(),
+                      max_depth=3, proportion=False, rounded=True, filled = True)
+        plt.savefig(path + 'rf_tree.png')
     plt.clf()
 
     # ##### Histogram of False Negatives
@@ -195,26 +196,34 @@ def fit(datafile=None,
     mask1 = y_test != y_pred
     mask2 = y_test == 0 # Irrigated
     false_neg_idx = X_test[mask1 & mask2].index
-    fn_plot = train_val_data.loc[false_neg_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var].plot.bar()
-    plt.title('Histogram of False Negatives')
-    plt.savefig(path + 'rf_hist_fn_by_loc.png')
+    tmp_data = train_val_data.loc[false_neg_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var]
+    if len(tmp_data.index) > 0:
+        fn_plot = tmp_data.plot.bar()
+        plt.title('Histogram of False Negatives')
+        plt.savefig(path + 'rf_hist_fn_by_loc.png')
 
     # by month
-    fn_plot = train_val_data.loc[false_neg_idx].sort_values('loc_idx').groupby('mm').count()[et_var].plot.bar()
-    plt.title('Histogram of False Negatives')
-    plt.savefig(path + 'rf_hist_fn_by_month.png')
+    tmp_data = train_val_data.loc[false_neg_idx].sort_values('loc_idx').groupby('mm').count()[et_var]
+    if len(tmp_data.index) > 0:
+        fn_plot = tmp_data.plot.bar()
+        plt.title('Histogram of False Negatives')
+        plt.savefig(path + 'rf_hist_fn_by_month.png')
 
     # ##### Histogram of False Positives
     mask2 = y_test != 0 # Irrigated
     false_pos_idx = X_test[mask1 & mask2].index
-    fp_plot = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var].plot.bar()
-    plt.title('Histogram of False Positives')
-    plt.savefig(path + 'rf_hist_fp_by_loc.png')
+    tmp_data = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var]
+    if len(tmp_data.index) > 0:
+        fn_plot = tmp_data.plot.bar()
+        plt.title('Histogram of False Positives')
+        plt.savefig(path + 'rf_hist_fp_by_loc.png')
 
-        # by month
-    fp_plot = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('mm').count()[et_var].plot.bar()
-    plt.title('Histogram of False Negatives')
-    plt.savefig(path + 'rf_hist_fp_by_month.png')
+    # by month
+    tmp_data = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('mm').count()[et_var]
+    if len(tmp_data.index) > 0:
+        fn_plot = tmp_data.plot.bar()
+        plt.title('Histogram of False Negatives')
+        plt.savefig(path + 'rf_hist_fp_by_month.png')
 
 
     # ## Save training and test data
@@ -222,15 +231,15 @@ def fit(datafile=None,
     # test data
     if save_model:
         out = X_test
-        out['true_label'] = y_test
-        out['pred_label'] = y_pred
+        out.loc[:, 'true_label'] = y_test
+        out.loc[:, 'pred_label'] = y_pred
         out.to_pickle(path + 'testdata.pkl')
 
     # training data
     if save_model:
         out = X_train
-        out['true_label'] = y_train
-        out['pred_label'] = classifier.predict(X_train[cols[:num_cols_rf]])
+        out.loc[:, 'true_label'] = y_train
+        out.loc[:, 'pred_label'] = classifier.predict(X_train[cols[:num_cols_rf]])
         out.to_pickle(path + 'traindata.pkl')
 
 
