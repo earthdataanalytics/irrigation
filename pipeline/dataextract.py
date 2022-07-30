@@ -1,5 +1,6 @@
 import ee
 from tqdm import tqdm
+from datetime import datetime, timedelta
 
 from etbrasil.geesebal import TimeSeries_bcj
 from pipeline import cropmasks as msk
@@ -70,6 +71,80 @@ def extractData(aoi, aoi_label,
                          loc=str(idx)+'_'+str(start_yr+yr_inc))
             out.append(sebalTS.ETandMeteo)
             cnt+=1
+
+    print('Number of tasks launched =', cnt)
+    return out
+
+def extractMonthlyData(aoi, aoi_label,
+                        max_cloud_cover=30,
+                        buffer_range=50,
+                        calc_ET_region=False):
+
+    # ======================
+    #
+    #   THIS IS A MONTHLY VERSION
+    #
+    # ======================
+
+    # buffer_range is in meters, max 7000 for GEE limits.
+    # must be set tight around sample locations to limit zone from
+    # which data is retrievedfor the sample location itself.
+
+    # region size for ET_24_R calculation is handled with
+    # buffersize parameter below
+
+    out = []
+    max_points = 50000 # set arbitrarily high to capture all values
+
+    # ensure there is a defined buffer zone around each location
+    locs_list = aoi.toList(max_points)
+    samples_buffered = ee.FeatureCollection(locs_list) \
+                            .geometry() \
+                            .coordinates() \
+                            .map(lambda p: ee.Geometry.Point(p) \
+                                             .buffer(buffer_range))
+
+    num_samples = samples_buffered.size().getInfo()
+    print('Number of samples to extract =', num_samples)
+
+    cnt = 0
+    for idx in tqdm(range(num_samples), leave=False):
+        sample = samples_buffered.get(idx)
+        sample_location = ee.Geometry(sample)
+
+        # use buffersize=5000 and calcRegionalET=True for ET_24h_R regionalization calculations
+        buffsize = 50
+        if calc_ET_region:
+            buffsize = 5000
+
+        sample_date = ee.Date(sample.get('date')).format('YYYY-MM-dd').getInfo()
+        sample_date_local = datetime.strptime(sample_date, "%Y-%m-%d")
+
+        start_date = sample_date_local + timedelta(days=-2)
+        start_yr = int(datetime.strftime(start_date, "%Y"))
+        start_mo = int(datetime.strftime(start_date, "%m"))
+        start_dy = int(datetime.strftime(start_date, "%d"))
+
+        end_date = sample_date_local + timedelta(days=2)
+        end_yr = int(datetime.strftime(end_date, "%Y"))
+        end_mo = int(datetime.strftime(end_date, "%m"))
+        end_dy = int(datetime.strftime(end_date, "%d"))
+
+        sebalTS = TimeSeries_bcj(start_yr, start_mo, start_dy,
+                                    end_yr, end_mo, end_dy,
+                                    max_cloud_cover, sample_location,
+                                    buffersize=buffsize,
+                                    calcRegionalET=calc_ET_region
+                                 )
+
+        sebalTS.ETandMeteo = sebalTS.ETandMeteo \
+                                .map(lambda x: x.set('loc_type', x.get('POINT_TYPE')))
+
+        exportETdata(etFC=sebalTS.ETandMeteo,
+                     lbl=aoi_label,
+                     loc=str(idx)+'_'+str(start_yr))
+        out.append(sebalTS.ETandMeteo)
+        cnt+=1
 
     print('Number of tasks launched =', cnt)
     return out

@@ -5,28 +5,117 @@ from pipeline import rainfed_labels as rain_labels
 
 def getRawLabeledData():
     # irrMapper data
+    # https://www.mdpi.com/2072-4292/12/14/2328
+    #       POINT_TYPE 0 = irrigated agriculture
+    #       POINT_TYPE 1 = dryland agriculture
+    #       POINT_TYPE 2 = uncultivated land
+    #       POINT_TYPE 3 = wetlands
+    # verified by manual inspection on GEE
     irr_west = ee.FeatureCollection('projects/ee-dgketchum/assets/bands/IrrMapper_RF_training_data') \
                     .filter(ee.Filter.eq('POINT_TYPE', '0')) \
-                    .map(lambda x: x.set('POINT_LOC', 'us_west'))
+                    .map(lambda x: x.set('POINT_LOC', 'us_west')) \
+                    .map(lambda x: x.set('POINT_TYPE', 1)) \
+                   .map(lambda x: x.set('POINT_SRC', 'IrrMapper'))
 
     rain_west = ee.FeatureCollection('projects/ee-dgketchum/assets/bands/IrrMapper_RF_training_data') \
                     .filter(ee.Filter.eq('POINT_TYPE', '1')) \
-                    .map(lambda x: x.set('POINT_LOC', 'us_west'))
+                    .map(lambda x: x.set('POINT_LOC', 'us_west')) \
+                    .map(lambda x: x.set('POINT_TYPE', 0)) \
+                   .map(lambda x: x.set('POINT_SRC', 'IrrMapper'))
 
     # LANID data
+    # https://zenodo.org/record/5548555#.YuVBOC-B30q
+    # see Metadata.docx
+    #       POINT_TYPE 0 = rainfed
+    #       POINT_TYPE 1 = irrigated
     irr_east = geemap.shp_to_ee('./lanid/irrSamples_eastCONUS.shp') \
-                        .map(lambda x: x.set('POINT_LOC', 'us_east'))
+                        .map(lambda x: x.set('POINT_LOC', 'us_east')) \
+                        .map(lambda x: x.set('POINT_TYPE', 1)) \
+                        .map(lambda x: x.set('POINT_SRC', 'LANID'))
 
     rain_east = geemap.shp_to_ee('./lanid/rainfedSamples_eastCONUS.shp') \
-                        .map(lambda x: x.set('POINT_LOC', 'us_east'))
+                        .map(lambda x: x.set('POINT_LOC', 'us_east')) \
+                        .map(lambda x: x.set('POINT_TYPE', 0)) \
+                        .map(lambda x: x.set('POINT_SRC', 'LANID'))
 
     return irr_west, rain_west, irr_east, rain_east
 
+def generateManualLabels(start_yr, end_yr):
+    # generate additional points for west using manual labels for rainfed locations
+    #       retrieve data that was manually labeled independent of time
+    #       and generate temporal samples
+    manual_labels = rain_labels.manual_rainfed
+
+    # generate temporal samples (1 sample for each location for each year)
+    manual_data = None
+    for yr in range(start_yr, end_yr+1):
+        tmp = manual_labels.map(lambda x: x.set('YEAR', yr))
+        if manual_data:
+            manual_data = manual_data.merge(tmp)
+        else:
+            manual_data = ee.FeatureCollection(tmp)
+
+    return manual_data
+
+def preProcessEastData(irr_east, rain_east, start_yr, end_yr):
+    # generate temporal samples (1 sample for each location for each year)
+    irr_east_flat = None
+    for yr in range(start_yr, end_yr+1):
+        fc = irr_east.filter(ee.List([ee.Filter.lte('startYr', yr),
+                      ee.Filter.gte('endYr', yr)])) \
+              .map(lambda x: x.set('YEAR', yr)
+        if irr_east_flat:
+            irr_east_flat = irr_east_flat.merge(fc)
+        else:
+            irr_east_flat = fc
+
+    # generate temporal samples (1 sample for each location for each year)
+    rain_east_flat = None
+    for yr in range(start_yr, end_yr+1):
+        fc = rain_east.filter(ee.List([ee.Filter.lte('startYr', yr),
+                      ee.Filter.gte('endYr', yr)])) \
+              .map(lambda x: x.set('YEAR', yr)
+        if rain_east_flat:
+            rain_east_flat = rain_east_flat.merge(fc)
+        else:
+            rain_east_flat = fc
+
+    east_data = irr_east_flat.merge(rain_east_flat)
+    return east_data
+
+def retrieveSampleAnnualDatasetImage(start_yr, end_yr):
+    irr_west, rain_west, irr_east, rain_east = getRawLabeledData()
+
+    # merge west data
+    sample_data = irr_west.merge(rain_west) \
+                    .map(lambda x: x.set('YEAR', ee.Number.parse(
+                                        ee.Date(
+                                            ee.Number.parse(x.get('YEAR'))
+                                        ).format('YYYY')
+                                    )
+                                ))
+
+    # get manually labeled data and combine with the irrMapper data
+    manual_data = generateManualLabels(start_yr, end_yr)
+
+    # pre-process east data
+    east_data = preProcessEastData(irr_east, rain_east, start_yr, end_yr)
+
+    # merge all data and downselect specific properties
+    sample_data = sample_data.merge(manual_data) \
+                        .merge(east_data) \
+                        .select(['YEAR', 'POINT_TYPE', 'coordinates'])
+
+    return sample_data
+
 def retrieveSampleDatasetImageWest(start_yr, end_yr):
     # retrieve irrMapper data (western USA) for both Train and Val, then merge together
-    # POINT_TYPE 0 = irrigated
-    # POINT_TYPE 1 = rainfed
-
+    # https://www.mdpi.com/2072-4292/12/14/2328
+    #       POINT_TYPE 0 = irrigated agriculture
+    #       POINT_TYPE 1 = dryland agriculture
+    #       POINT_TYPE 2 = uncultivated land
+    #       POINT_TYPE 3 = wetlands
+    # verified by manual inspection on GEE
     train = ee.FeatureCollection('projects/ee-dgketchum/assets/bands/IrrMapper_RF_training_data') \
         .filter(ee.Filter.lt('POINT_TYPE', '2'))
     val = ee.FeatureCollection('projects/ee-dgketchum/assets/validation/IrrMapper_RF_validation_points') \
@@ -70,8 +159,10 @@ def retrieveSampleDatasetImageWest(start_yr, end_yr):
 
 def retrieveSampleDatasetImageEast(start_yr, end_yr):
     # retrieve LANID data (eastern USA) for both irrigated and rainfed, then merge together
-    # POINT_TYPE 0 = irrigated
-    # POINT_TYPE 1 = rainfed
+    # https://zenodo.org/record/5548555#.YuVBOC-B30q
+    # see Metadata.docx
+    #       POINT_TYPE 0 = rainfed
+    #       POINT_TYPE 1 = irrigated
 
     # generate temporal samples (1 sample for each location for each year)
     irr_east = geemap.shp_to_ee('./lanid/irrSamples_eastCONUS.shp')
@@ -80,7 +171,7 @@ def retrieveSampleDatasetImageEast(start_yr, end_yr):
         fc = irr_east.filter(ee.List([ee.Filter.lte('startYr', yr),
                       ee.Filter.gte('endYr', yr)])) \
               .map(lambda x: x.set('YEAR', yr) \
-                              .set('POINT_TYPE', 0))
+                              .set('POINT_TYPE', 1))
         if irr_east_flat:
             irr_east_flat = irr_east_flat.merge(fc)
         else:
@@ -93,7 +184,7 @@ def retrieveSampleDatasetImageEast(start_yr, end_yr):
         fc = rain_east.filter(ee.List([ee.Filter.lte('startYr', yr),
                       ee.Filter.gte('endYr', yr)])) \
               .map(lambda x: x.set('YEAR', yr) \
-                              .set('POINT_TYPE', 1))
+                              .set('POINT_TYPE', 0))
         if rain_east_flat:
             rain_east_flat = rain_east_flat.merge(fc)
         else:
@@ -106,26 +197,66 @@ def retrieveSampleDatasetImageEast(start_yr, end_yr):
 
     return sample_data
 
-def generateSampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=2015, end_yr=2021):
-    sample_img_west = retrieveSampleDatasetImageWest(start_yr, end_yr)
-    sample_img_east = retrieveSampleDatasetImageEast(start_yr, end_yr)
-    sample_locations = sample_img_west.merge(sample_img_east)
+def generateAnnualSampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=2015, end_yr=2021):
+    #sample_img_west = retrieveSampleDatasetImageWest(start_yr, end_yr)
+    #sample_img_east = retrieveSampleDatasetImageEast(start_yr, end_yr)
+    #sample_locations_tmp = sample_img_west.merge(sample_img_east)
+    sample_locations_tmp = retrieveSampleAnnualDatasetImage(start_yr, end_yr)
 
     # filters
     if aoi:
-        sample_locations = sample_locations.filterBounds(aoi)
+        sample_locations_tmp = sample_locations_tmp.filterBounds(aoi)
 
     # randomize
-    sample_locations = sample_locations \
+    sample_locations_tmp = sample_locations_tmp \
                             .randomColumn('rando', seed=159) \
                             .sort('rando')
 
-    sample_locations_irr = sample_locations \
+    sample_locations_irr = sample_locations_tmp \
+                            .filter(ee.Filter.eq('POINT_TYPE', 1)) \
+                            .limit(num_samples)
+
+    sample_locations_rain = sample_locations_tmp \
                             .filter(ee.Filter.eq('POINT_TYPE', 0)) \
                             .limit(num_samples)
 
-    sample_locations_rain = sample_locations \
+    sample_locations = sample_locations_irr.merge(sample_locations_rain)
+
+    return sample_locations
+
+def getRawMonthlyLabeledData():
+    def convertToFeature(label_item):
+        return ee.FeatureCollection(label_item['id'])
+
+    def setCoords(item):
+        # long is index 0 in coordinates list, lat is index 1
+        return item.set('coordinates', item.geometry().coordinates())
+
+    label_files = ee.data.listAssets('projects/eda-bjonesneu-proto/assets/irrigation/labels')
+    label_features = ee.List(label_files['assets'].map(convertToFeature))
+    sample_locations = ee.FeatureCollection(label_features).flatten() \
+                                .map(setCoords)
+
+    return sample_locations
+
+def generateMonthlySampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=2015, end_yr=2021):
+    sample_locations_tmp = getRawMonthlyLabeledData()
+    
+    # filters
+    if aoi:
+        sample_locations_tmp = sample_locations_tmp.filterBounds(aoi)
+
+    # randomize
+    sample_locations_tmp = sample_locations_tmp \
+                            .randomColumn('rando', seed=159) \
+                            .sort('rando')
+
+    sample_locations_irr = sample_locations_tmp \
                             .filter(ee.Filter.eq('POINT_TYPE', 1)) \
+                            .limit(num_samples)
+
+    sample_locations_rain = sample_locations_tmp \
+                            .filter(ee.Filter.eq('POINT_TYPE', 0)) \
                             .limit(num_samples)
 
     sample_locations = sample_locations_irr.merge(sample_locations_rain)
