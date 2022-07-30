@@ -127,6 +127,10 @@ def fit(datafile=None,
     train_val_data = df.dropna(subset=cols)
     out_stats['num_samples_train_total'] = int(len(train_val_data))
 
+    train_val_data.loc[train_val_data['type']=='Irrigated', 'type'] = 0
+    train_val_data.loc[train_val_data['type']=='Rainfed', 'type'] = 1
+
+    print(train_val_data[(train_val_data['type'] != 0) && (train_val_data['type'] != 1)]])
     X = train_val_data[cols]
     y = train_val_data['type']
 
@@ -137,11 +141,11 @@ def fit(datafile=None,
         strat = train_val_data[['type']]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=strat)
 
-        out_stats['num_samples_train_irr'] = int(len(y_train[y_train == 'Irrigated']))
-        out_stats['num_samples_train_rain'] = int(len(y_train[y_train=='Rainfed']))
+        out_stats['num_samples_train_irr'] = int(len(y_train[y_train == 0]))
+        out_stats['num_samples_train_rain'] = int(len(y_train[y_train==1]))
 
-        out_stats['num_samples_test_irr'] = int((y_test == 'Irrigated').sum())
-        out_stats['num_samples_test_rain'] = int((y_test == 'Rainfed').sum())
+        out_stats['num_samples_test_irr'] = int((y_test == 0).sum())
+        out_stats['num_samples_test_rain'] = int((y_test == 1).sum())
 
     # ##### Create and train model
     clf = RandomForestClassifier()
@@ -169,7 +173,7 @@ def fit(datafile=None,
         out_stats['rf_f1'] = classifier.best_score_
     else:
         out_stats['rf_accuracy'] = float(classifier.score(X_test_sub, y_test))
-        f1_rf = f1_score(y_test, y_pred, pos_label='Irrigated')
+        f1_rf = f1_score(y_test, y_pred, pos_label=1)
         out_stats['rf_f1'] = float(f1_rf)
 
     # ## Create plots
@@ -189,7 +193,7 @@ def fit(datafile=None,
     # ##### Histogram of False Negatives
     fig = plt.figure(figsize=(10,5))
     mask1 = y_test != y_pred
-    mask2 = y_test == 'Irrigated'
+    mask2 = y_test == 0 # Irrigated
     false_neg_idx = X_test[mask1 & mask2].index
     fn_plot = train_val_data.loc[false_neg_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var].plot.bar()
     plt.title('Histogram of False Negatives')
@@ -201,7 +205,7 @@ def fit(datafile=None,
     plt.savefig(path + 'rf_hist_fn_by_month.png')
 
     # ##### Histogram of False Positives
-    mask2 = y_test != 'Irrigated'
+    mask2 = y_test != 0 # Irrigated
     false_pos_idx = X_test[mask1 & mask2].index
     fp_plot = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var].plot.bar()
     plt.title('Histogram of False Positives')

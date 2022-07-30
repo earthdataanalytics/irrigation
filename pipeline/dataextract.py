@@ -75,7 +75,7 @@ def extractData(aoi, aoi_label,
     return out
 
 def buildImageCollection(aoi, start, end, max_cloud=10, ls5=False, ls7=False, ls_all=False):
-    # always returns LS8
+    # always returns LS8 by default
     cropmask = msk.createGFSADmask(aoi)
     def getImages(dataset):
         return ee.ImageCollection(dataset) \
@@ -92,7 +92,7 @@ def buildImageCollection(aoi, start, end, max_cloud=10, ls5=False, ls7=False, ls
         return imgcol8.merge(imgcol7).merge(imgcol5)
     if ls7:
         return imgcol8.merge(imgcol7)
-    if ls7:
+    if ls5:
         return imgcol8.merge(imgcol5)
     return imgcol8
 
