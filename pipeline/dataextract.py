@@ -6,13 +6,19 @@ from etbrasil.geesebal import TimeSeries_bcj
 from pipeline import cropmasks as msk
 
 def exportETdata(etFC, lbl, loc, folder='irrigation'):
-    filename = 'et_TS_' + lbl + '_' + loc
+    filename = ee.String('et_TS_')
+    filename = filename.cat(ee.String(lbl))
+    filename = filename.cat(ee.String('_'))
+    filename = filename.cat(ee.String(loc))
+    filename = filename.getInfo()
+
     task = ee.batch.Export.table.toDrive(
       collection = etFC,
       description = filename,
       folder = folder,
     )
     task.start()
+    return task
 
 def extractData(aoi, aoi_label,
                 start_yr=2015, start_mo=6, start_dy=1,
@@ -96,8 +102,14 @@ def extractMonthlyData(aoi, aoi_label,
     out = []
     max_points = 50000 # set arbitrarily high to capture all values
 
+    # use buffersize=5000 and calcRegionalET=True for ET_24h_R regionalization calculations
+    buffsize = 50
+    if calc_ET_region:
+        buffsize = 5000
+
     # ensure there is a defined buffer zone around each location
     locs_list = aoi.toList(max_points)
+
     samples_buffered = ee.FeatureCollection(locs_list) \
                             .geometry() \
                             .coordinates() \
@@ -109,26 +121,21 @@ def extractMonthlyData(aoi, aoi_label,
 
     cnt = 0
     for idx in tqdm(range(num_samples), leave=False):
-        sample = samples_buffered.get(idx)
-        sample_location = ee.Geometry(sample)
+        sample = ee.Feature(locs_list.get(idx))
+        sample_location = ee.Geometry(samples_buffered.get(idx))
+        loc_type = sample.get('POINT_TYPE')
 
-        # use buffersize=5000 and calcRegionalET=True for ET_24h_R regionalization calculations
-        buffsize = 50
-        if calc_ET_region:
-            buffsize = 5000
+        sample_date = ee.Date(sample.get('date'))
 
-        sample_date = ee.Date(sample.get('date')).format('YYYY-MM-dd').getInfo()
-        sample_date_local = datetime.strptime(sample_date, "%Y-%m-%d")
+        start_date = sample_date.advance(-2, 'day')
+        start_yr = ee.Number.parse(start_date.format('YYYY'))
+        start_mo = ee.Number.parse(start_date.format('MM'))
+        start_dy = ee.Number.parse(start_date.format('dd'))
 
-        start_date = sample_date_local + timedelta(days=-2)
-        start_yr = int(datetime.strftime(start_date, "%Y"))
-        start_mo = int(datetime.strftime(start_date, "%m"))
-        start_dy = int(datetime.strftime(start_date, "%d"))
-
-        end_date = sample_date_local + timedelta(days=2)
-        end_yr = int(datetime.strftime(end_date, "%Y"))
-        end_mo = int(datetime.strftime(end_date, "%m"))
-        end_dy = int(datetime.strftime(end_date, "%d"))
+        end_date = sample_date.advance(2, 'day')
+        end_yr = ee.Number.parse(end_date.format('YYYY'))
+        end_mo = ee.Number.parse(end_date.format('MM'))
+        end_dy = ee.Number.parse(end_date.format('dd'))
 
         sebalTS = TimeSeries_bcj(start_yr, start_mo, start_dy,
                                     end_yr, end_mo, end_dy,
@@ -138,12 +145,15 @@ def extractMonthlyData(aoi, aoi_label,
                                  )
 
         sebalTS.ETandMeteo = sebalTS.ETandMeteo \
-                                .map(lambda x: x.set('loc_type', x.get('POINT_TYPE')))
+                                .map(lambda x: x.set('loc_type', loc_type))
 
-        exportETdata(etFC=sebalTS.ETandMeteo,
-                     lbl=aoi_label,
-                     loc=str(idx)+'_'+str(start_yr))
-        out.append(sebalTS.ETandMeteo)
+        export_task = exportETdata(
+                etFC=sebalTS.ETandMeteo,
+                lbl=aoi_label,
+                loc=sample.id()
+            )
+
+        #out.append(export_task)
         cnt+=1
 
     print('Number of tasks launched =', cnt)

@@ -66,11 +66,11 @@ class TimeSeries_bcj():
         self.coordinate=coordinate
         self.cloud_cover=cloud_cover
         self.start_date = ee.Date.fromYMD(year_i,month_i,day_i)
-        self.i_date=date(year_i,month_i,day_i)
-        self.end_date=date(year_e,month_e,day_e)
-        self.n_search_days=self.end_date - self.i_date
-        self.n_search_days=self.n_search_days.days
-        self.end_date = self.start_date.advance(self.n_search_days, 'day')
+        self.i_date = ee.Date.fromYMD(year_i,month_i,day_i)
+        self.end_date = ee.Date.fromYMD(year_e,month_e,day_e)
+        #self.n_search_days = self.end_date.difference(self.i_date, 'days')
+        #self.n_search_days=self.n_search_days.days
+        #self.end_date = self.start_date.advance(self.n_search_days, 'day')
 
         #COLLECTIONS
         self.collection_l5=fexp_landsat_5Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
