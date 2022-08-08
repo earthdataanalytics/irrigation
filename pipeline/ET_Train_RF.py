@@ -49,7 +49,7 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score
 import os
 import joblib
 from datetime import datetime
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -119,16 +119,17 @@ def fit(datafile=None,
     out_stats['temporality'] = 'all_months'
 
     cols = [et_var, 'NDVI', 'LandT_G', 'last_rain', 'sum_precip_priorX', 'mm', 'yyyy', 'loc_idx', 'date']
-    num_cols_rf = 6
+    num_cols_rf = 5 # changed from 6 on 2022.08.02 to remove yyyy from predictors
 
-    use_gridsearchcv = True
+    use_gridsearchcv = False # flag added to code in July 2022.
+                              # Disabled on 2022.08.02 because accuracy and f1 score not correctly output.
 
     # ##### Setup training/validation dataset
     train_val_data = df.dropna(subset=cols)
     out_stats['num_samples_train_total'] = int(len(train_val_data))
 
-    train_val_data.loc[train_val_data['type']=='Irrigated', 'type'] = 0
-    train_val_data.loc[train_val_data['type']=='Rainfed', 'type'] = 1
+    train_val_data.loc[train_val_data['type']=='Irrigated', 'type'] = 1
+    train_val_data.loc[train_val_data['type']=='Rainfed', 'type'] = 0
 
     X = train_val_data[cols]
     y = train_val_data['type']
@@ -184,9 +185,9 @@ def fit(datafile=None,
     plt.savefig(path + 'rf_cm.png')
 
     # ##### Decision Tree
-    if not use_gridsearchcv: # causes crash
+    if False: # not use_gridsearchcv: # causes crash
         fig = plt.figure(figsize=(25,20))
-        dt_plot = tree.plot_tree(classifier.best_estimator_.estimators_[0], feature_names=cols, class_names=y_test.unique(),
+        dt_plot = tree.plot_tree(classifier.estimators_[0], feature_names=cols, class_names=y_test.unique(),
                       max_depth=3, proportion=False, rounded=True, filled = True)
         plt.savefig(path + 'rf_tree.png')
     plt.clf()
@@ -214,15 +215,15 @@ def fit(datafile=None,
     false_pos_idx = X_test[mask1 & mask2].index
     tmp_data = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('loc_idx').count()[et_var]
     if len(tmp_data.index) > 0:
-        fn_plot = tmp_data.plot.bar()
+        fp_plot1 = tmp_data.plot.bar()
         plt.title('Histogram of False Positives')
         plt.savefig(path + 'rf_hist_fp_by_loc.png')
 
     # by month
     tmp_data = train_val_data.loc[false_pos_idx].sort_values('loc_idx').groupby('mm').count()[et_var]
     if len(tmp_data.index) > 0:
-        fn_plot = tmp_data.plot.bar()
-        plt.title('Histogram of False Negatives')
+        fp_plot2 = tmp_data.plot.bar()
+        plt.title('Histogram of False Positives')
         plt.savefig(path + 'rf_hist_fp_by_month.png')
 
 
@@ -296,4 +297,7 @@ def parse_opt():
 
 if __name__ == "__main__":
     opt = parse_opt()
-    fit(**vars(opt))
+    try:
+        fit(**vars(opt))
+    except:
+        print('fit error')

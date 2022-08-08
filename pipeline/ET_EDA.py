@@ -48,13 +48,18 @@ import os
 import glob
 import joblib
 from datetime import datetime
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # custom libraries
 import utils
+
+import logging
+logging.basicConfig(format='%(asctime)s %(message)s',
+                    filename='et_eda.log',
+                    filemode='w')
 
 # ## Load, transform and cleanse data
 
@@ -66,8 +71,12 @@ def analyze(datafile=None,
     df = pd.DataFrame()
     zf = ZipFile(inpath + datafile)
     files = zf.filelist
-    for file in files:
-        df = pd.concat([df, pd.read_csv(zf.open(file))], ignore_index=True)
+    for file in tqdm(files):
+        try:
+            tmp = pd.read_csv(zf.open(file))
+            df = pd.concat([df, tmp], ignore_index=True)
+        except:
+            logging.error(f' in file {file.filename}')
 
     df = utils.baseETtransforms(df)
     df = utils.generateETlocationLabels(df)
