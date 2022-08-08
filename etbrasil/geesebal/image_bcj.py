@@ -55,21 +55,22 @@ class Image_bcj():
                  window_start=None,
                  window_end=None,
                  aoi=None,
-                 cloud_max=10
+                 cloud_max=10,
+                 ls_col2=False
               ):
 
         #output variable
         self.ETandMeteo = None
 
         #COLLECTIONS
-        collection_l5=fexp_landsat_5Coordinate(window_start, window_end, aoi, cloud_max)
-        collection_l7=fexp_landsat_7Coordinate(window_start, window_end, aoi, cloud_max)
-        collection_l8=fexp_landsat_8Coordinate(window_start, window_end, aoi, cloud_max)
+        collection_l5=fexp_landsat_5Coordinate(window_start, window_end, aoi, cloud_max, ls_col2)
+        collection_l7=fexp_landsat_7Coordinate(window_start, window_end, aoi, cloud_max, ls_col2)
+        collection_l8=fexp_landsat_8Coordinate(window_start, window_end, aoi, cloud_max, ls_col2)
 
         def retrieveETandMeteo(image):
             #GET INFORMATIONS FROM IMAGE
             image = ee.Image(image)
-            zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
+            zenith_angle=image.get('SOLAR_ZENITH_ANGLE') # changed in migration from Col1 to Col2
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
             _hour=ee.Number(_date.get('hour'))
@@ -85,7 +86,10 @@ class Image_bcj():
             #GEOMETRY
             geometryReducer=image.geometry().bounds()
 
-            sun_elevation=ee.Number(90).subtract(zenith_angle)
+            if ls_col2:
+                sun_elevation=image.get('SUN_ELEVATION') # changed in migration from Col1 to Col2
+            else:
+                sun_elevation=ee.Number(90).subtract(zenith_angle) # changed in migration from Col1 to Col2
 
             #AIR TEMPERATURE [C]
             T_air = image.select('AirT_G');
@@ -175,6 +179,7 @@ class Image_bcj():
                             .map(get_meteorology) \
                             .map(retrieveETandMeteo)
         self.ETandMeteo = ic5
+        #print('5', ic5.size().getInfo())
 
         ic7 = collection_l7.map(f_cloudMaskL457_SR) \
                             .map(f_albedoL5L7) \
@@ -183,6 +188,7 @@ class Image_bcj():
                             .map(get_meteorology) \
                             .map(retrieveETandMeteo)
         self.ETandMeteo = self.ETandMeteo.merge(ic7)
+        #print('7', ic7.size().getInfo())
 
         ic8 = collection_l8.map(f_cloudMaskL8_SR) \
                             .map(f_albedoL8) \
@@ -191,3 +197,4 @@ class Image_bcj():
                             .map(get_meteorology) \
                             .map(retrieveETandMeteo)
         self.ETandMeteo = self.ETandMeteo.merge(ic8)
+        #print('8', ic8.size().getInfo())

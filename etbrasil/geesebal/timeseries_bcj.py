@@ -57,7 +57,8 @@ class TimeSeries_bcj():
                  Ts_cold=20,
                  NDVI_hot=10,
                  Ts_hot=20,
-                 calcRegionalET=False):
+                 calcRegionalET=False,
+                 ls_col2=False):
 
         #output variable
         self.ETandMeteo = None
@@ -73,9 +74,9 @@ class TimeSeries_bcj():
         #self.end_date = self.start_date.advance(self.n_search_days, 'day')
 
         #COLLECTIONS
-        self.collection_l5=fexp_landsat_5Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
-        self.collection_l7=fexp_landsat_7Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
-        self.collection_l8=fexp_landsat_8Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
+        self.collection_l5=fexp_landsat_5Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover, self.ls_col2)
+        self.collection_l7=fexp_landsat_7Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover, self.ls_col2)
+        self.collection_l8=fexp_landsat_8Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover, self.ls_col2)
 
         #FOR EACH IMAGE IN THE COLLECTION
         #ESTIMATE ET DAILY IMAGE AND EXTRACT
