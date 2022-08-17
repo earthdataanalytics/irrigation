@@ -2,6 +2,7 @@ import ee
 import geemap
 from pipeline import boundaries as bnd
 from pipeline import rainfed_labels as rain_labels
+from pipeline import cropmasks
 
 def getRawLabeledData():
     # irrMapper data
@@ -153,12 +154,21 @@ def getRawMonthlyLabeledData():
 
     return label_features.map(setCoords)
 
-def generateMonthlySampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=2015, end_yr=2021):
+def generateMonthlySampleLocations(aoi=None, aoi_label='', num_samples=10, start_yr=2015, end_yr=2021, excludeNonCrop=False):
     sample_locations_tmp = getRawMonthlyLabeledData()
 
     # filters
     if aoi:
         sample_locations_tmp = sample_locations_tmp.filterBounds(aoi)
+
+    if excludeNonCrop: # return sample locations which are not masked
+                      #  masked pixels have value of 0 in GEE
+        mask = cropmasks.createGFSADmask(aoi)
+        #feats = ee.FeatureCollection(sample_locations_tmp.coordinates().map(
+        #                lambda p: ee.Feature(ee.Geometry.Point(p), {})
+        #            ))
+        sample_locations_tmp = mask.reduceRegions(sample_locations_tmp, ee.Reducer.first(), 30) \
+                        .filter(ee.Filter.eq('first', 1))
 
     # randomize
     sample_locations_tmp = sample_locations_tmp \
