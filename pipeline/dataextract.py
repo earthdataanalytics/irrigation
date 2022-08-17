@@ -6,11 +6,12 @@ from etbrasil.geesebal import TimeSeries_bcj
 from pipeline import cropmasks as msk
 
 def exportETdata(etFC, lbl, loc, folder='irrigation'):
-    filename = ee.String('et_TS_')
-    filename = filename.cat(ee.String(lbl))
-    filename = filename.cat(ee.String('_'))
-    filename = filename.cat(ee.String(loc))
-    filename = filename.getInfo()
+    #filename = ee.String('et_TS_')
+    #filename = filename.cat(ee.String(lbl))
+    #filename = filename.cat(ee.String('_'))
+    #filename = filename.cat(ee.String(loc))
+    filename = str(loc)
+    #filename = filename.getInfo()
 
     task = ee.batch.Export.table.toDrive(
       collection = etFC,
@@ -84,7 +85,9 @@ def extractData(aoi, aoi_label,
 def extractMonthlyData(aoi, aoi_label,
                         max_cloud_cover=30,
                         buffer_range=50,
-                        calc_ET_region=False):
+                        calc_ET_region=False,
+                        restart_index=-1,
+                        ):
 
     # ======================
     #
@@ -121,6 +124,9 @@ def extractMonthlyData(aoi, aoi_label,
 
     cnt = 0
     for idx in tqdm(range(num_samples), leave=False):
+        if idx < restart_index:
+            continue
+
         sample = ee.Feature(locs_list.get(idx))
         sample_location = ee.Geometry(samples_buffered.get(idx))
         loc_type = sample.get('POINT_TYPE')
@@ -150,7 +156,7 @@ def extractMonthlyData(aoi, aoi_label,
         export_task = exportETdata(
                 etFC=sebalTS.ETandMeteo,
                 lbl=aoi_label,
-                loc=sample.id()
+                loc=idx
             )
 
         #out.append(export_task)
