@@ -72,6 +72,7 @@ class TimeSeries_bcj():
         #self.n_search_days = self.end_date.difference(self.i_date, 'days')
         #self.n_search_days=self.n_search_days.days
         #self.end_date = self.start_date.advance(self.n_search_days, 'day')
+        self.ls_col2 = ls_col2
 
         #COLLECTIONS
         self.collection_l5=fexp_landsat_5Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover, self.ls_col2)
