@@ -70,7 +70,6 @@ class Image_bcj():
         def retrieveETandMeteo(image):
             #GET INFORMATIONS FROM IMAGE
             image = ee.Image(image)
-            zenith_angle=image.get('SOLAR_ZENITH_ANGLE') # changed in migration from Col1 to Col2
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
             _hour=ee.Number(_date.get('hour'))
@@ -88,8 +87,10 @@ class Image_bcj():
 
             if ls_col2:
                 sun_elevation=image.get('SUN_ELEVATION') # changed in migration from Col1 to Col2
+                zenith_angle=ee.Number(90).subtract(sun_elevation) # New value in Col2, specified on https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC08_C02_T1_L2#image-properties
             else:
-                sun_elevation=ee.Number(90).subtract(zenith_angle) # changed in migration from Col1 to Col2
+                zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
+                sun_elevation=ee.Number(90).subtract(zenith_angle)
 
             #AIR TEMPERATURE [C]
             T_air = image.select('AirT_G');
