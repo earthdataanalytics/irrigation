@@ -20,7 +20,9 @@ def createMODISmask(aoi=None):
     return mask
 
 def createGFSADmask(aoi=None):
-    # required setting up a bucket on google cloud to host the raster images
+    # required setting up a bucket on google cloud to host the raster images which were sourced from:
+    #        https://www.usgs.gov/centers/western-geographic-science-center/science/global-food-security-support-analysis-data-30-m
+    # the data is for the year 2015
     # requires copying credentials to access the bucket
     import os
     from google.cloud import storage
