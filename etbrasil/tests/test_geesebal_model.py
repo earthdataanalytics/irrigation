@@ -99,6 +99,7 @@ class TestTimeSeries_bcj(unittest.TestCase):
             print("")
             print("")
             print("============= SUMMARY ====================")
+            print(f"Image ID = {image_id}")
             print(f"status = {properties['status']}")
             print(f"Date = {properties['date']}")
             print(f"ET_24H = {properties['ET_24h']}")
@@ -112,7 +113,8 @@ class TestTimeSeries_bcj(unittest.TestCase):
         # order et_values by date
         et_values.sort(key=lambda x: x[0])
 
+        # Print the ET values
+        print("ET Values = ")
         print(et_values)
-        print(sebalTS)
 if __name__ == '__main__':
     unittest.main()
