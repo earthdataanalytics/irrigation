@@ -24,13 +24,13 @@ import datetime
 
 #FOLDERS
 from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate
-from .masks import (f_cloudMaskL457_SR,f_cloudMaskL8_SR,f_albedoL5L7,f_albedoL8)
+from .masks import (f_albedoL5L7,f_albedoL8)
 from .meteorology import get_meteorology
 from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat,fexp_sensible_heat_flux)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
-
+from .constants import Constants
 #TIMESRIES FUNCTION
 class TimeSeries():
 
@@ -133,51 +133,41 @@ class TimeSeries():
 
             #MAKS
             if self.landsat_version == 'LANDSAT_5':
-                 #self.image=self.image .select([0,1,2,3,4,5,6,9], ["B","GR","R","NIR","SWIR_1","BRT","SWIR_2", "pixel_qa"])
-                 self.image_toa=ee.Image('LANDSAT/LT05/C01/T1/'+ self.CollectionList[n][4:])
+                 self.image_toa=ee.Image(Constants.LANDSAT_COLLECTION_5 + "/"+self.CollectionList[n][4:])
 
              #GET CALIBRATED RADIANCE
                  self.col_rad = ee.Algorithms.Landsat.calibratedRadiance(self.image_toa);
                  self.col_rad = self.image.addBands(self.col_rad.select([5],["T_RAD"]))
 
-             #CLOUD REMOTION
-                 self.image=ee.ImageCollection(self.image).map(f_cloudMaskL457_SR)
-
+            
              #ALBEDO TASUMI ET AL. (2008)
                  self.image=self.image.map(f_albedoL5L7)
 
             elif self.landsat_version == 'LANDSAT_7':
-                #self.image=self.image .select([0,1,2,3,4,5,6,9], ["B","GR","R","NIR","SWIR_1","BRT","SWIR_2", "pixel_qa"])
-                 self.image_toa=ee.Image('LANDSAT/LE07/C01/T1/'+ self.CollectionList[n][4:])
+                 self.image_toa=ee.Image(Constants.LANDSAT_COLLECTION_7 + "/"+ self.CollectionList[n][4:])
 
              #GET CALIBRATED RADIANCE
                  self.col_rad = ee.Algorithms.Landsat.calibratedRadiance(self.image_toa);
                  self.col_rad = self.image.addBands(self.col_rad.select([5],["T_RAD"]))
 
-             #CLOUD REMOTION
-                 self.image=ee.ImageCollection(self.image).map(f_cloudMaskL457_SR)
-
+            
              #ALBEDO TASUMI ET AL. (2008)
                  self.image=self.image.map(f_albedoL5L7)
 
             else:
-                #self.image = self.select([0,1,2,3,4,5,6,7,10],["UB","B","GR","R","NIR","SWIR_1","SWIR_2","BRT","pixel_qa"])
-                self.image_toa=ee.Image('LANDSAT/LC08/C01/T1/'+self.CollectionList[n][2:])
+                self.image_toa=ee.Image(Constants.LANDSAT_COLLECTION_8 + "/"+self.CollectionList[n][2:])
 
              #GET CALIBRATED RADIANCE
                 self.col_rad = ee.Algorithms.Landsat.calibratedRadiance(self.image_toa)
                 self.col_rad = self.image.addBands(self.col_rad.select([9],["T_RAD"]))
 
-             #CLOUD REMOTION
-                self.image=ee.ImageCollection(self.image).map(f_cloudMaskL8_SR)
-
+             
              #ALBEDO TASUMI ET AL. (2008) METHOD WITH KE ET AL. (2016) COEFFICIENTS
                 self.image=self.image.map(f_albedoL8)
 
             #GEOMETRY
             self.geometryReducer=self.image.geometry().bounds().getInfo()
             self.geometry_download=self.geometryReducer['coordinates']
-            self.camada_clip=self.image.select('BRT').first()
 
             self.sun_elevation=ee.Number(90).subtract(self.zenith_angle)
 
@@ -196,8 +186,7 @@ class TimeSeries():
             self.Rn24hobs = col_meteorology.select('Rn24h_G')
 
             #SRTM DATA ELEVATION
-            SRTM_ELEVATION ='USGS/SRTMGL1_003'
-            self.srtm = ee.Image(SRTM_ELEVATION).clip(self.geometryReducer)
+            self.srtm = ee.Image(Constants.SRTM_ELEVATION_COLLECTION).clip(self.geometryReducer)
             self.z_alt = self.srtm.select('elevation')
             self.slope = ee.Terrain.slope(self.z_alt)
 
