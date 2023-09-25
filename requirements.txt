@@ -1,0 +1,12 @@
+
+pandas 
+matplotlib
+seaborn
+scikit-learn
+earthengine-api
+geemap
+geopandas
+tqdm
+joblib
+PyCRS
+hdbscan

@@ -31,13 +31,13 @@ def f_cloudMaskL457_SR(image):
     return image.updateMask(mask);
 
 #FUNCTION FO MASK CLOUD IN LANDSAT 8 FOR SURFACE REFELCTANCE
-def f_cloudMaskL8_SR(image):
-    quality = image.select('pixel_qa');
-    c01 = quality.eq(322); #CLEAR, LOW CONFIDENCE CLOUD
-    c02 = quality.eq(324); #WATER, LOW CONFIDENCE CLOUD
-    c03 = quality.eq(1346);#CLEAR TERRAIN
-    mask = c01.Or(c02).Or(c03);
-    return image.updateMask(mask);
+# def f_cloudMaskL8_SR(image):
+#     quality = image.select('pixel_qa');
+#     c01 = quality.eq(322); #CLEAR, LOW CONFIDENCE CLOUD
+#     c02 = quality.eq(324); #WATER, LOW CONFIDENCE CLOUD
+#     c03 = quality.eq(1346);#CLEAR TERRAIN
+#     mask = c01.Or(c02).Or(c03);
+#     return image.updateMask(mask);
 
 #ALBEDO
 #TASUMI ET AL(2008) FOR LANDSAT 5 AND 7
@@ -45,12 +45,12 @@ def f_albedoL5L7(image):
 
     alfa = image.expression(
       '(0.254*B1) + (0.149*B2) + (0.147*B3) + (0.311*B4) + (0.103*B5) + (0.036*B7)',{
-        'B1' : image.select(['B']).divide(10000),
-        'B2' : image.select(['GR']).divide(10000),
-        'B3' : image.select(['R']).divide(10000),
-        'B4' : image.select(['NIR']).divide(10000),
-        'B5' : image.select(['SWIR_1']).divide(10000),
-        'B7' : image.select(['SWIR_2']).divide(10000)
+        'B1' : image.select(['B']),
+        'B2' : image.select(['GR']),
+        'B3' : image.select(['R']),
+        'B4' : image.select(['NIR']),
+        'B5' : image.select(['SWIR_1']),
+        'B7' : image.select(['SWIR_2'])
       }).rename('ALFA');
 
     #ADD BANDS
@@ -62,13 +62,13 @@ def f_albedoL5L7(image):
 def f_albedoL8(image):
     alfa = image.expression(
       '(0.130*B1) + (0.115*B2) + (0.143*B3) + (0.180*B4) + (0.281*B5) + (0.108*B6) + (0.042*B7)',{  #// (Ke, Im  et al 2016)
-        'B1' : image.select(['UB']).divide(10000),
-        'B2' : image.select(['B']).divide(10000),
-        'B3' : image.select(['GR']).divide(10000),
-        'B4' : image.select(['R']).divide(10000),
-        'B5' : image.select(['NIR']).divide(10000),
-        'B6' : image.select(['SWIR_1']).divide(10000),
-        'B7' : image.select(['SWIR_2']).divide(10000)
+        'B1' : image.select(['UB']),
+        'B2' : image.select(['B']),
+        'B3' : image.select(['GR']),
+        'B4' : image.select(['R']),
+        'B5' : image.select(['NIR']),
+        'B6' : image.select(['SWIR_1']),
+        'B7' : image.select(['SWIR_2'])
       }).rename('ALFA');
 
     #ADD BANDS
@@ -77,5 +77,5 @@ def f_albedoL8(image):
 if __name__ == "__main__":
     f_albedoL8()
     f_albedoL5L7()
-    f_cloudMaskL8_SR()
-    f_cloudMaskL457_SR()
+    # f_cloudMaskL8_SR()
+    # f_cloudMaskL457_SR()

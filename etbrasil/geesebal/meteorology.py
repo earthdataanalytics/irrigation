@@ -24,15 +24,15 @@
 #PYTHON PACKAGES
 #Call EE
 import ee
+from .constants import Constants
 
 #GLOBAL LAND DATA ASSIMILATION SYSTEM (GLDAS)
 #1984 TO 1999-12-31 - GLDAS 2.0
 #2000 TO PRESENT - GLDAS 2.1
 #3h, 6h, 9h, 12h, 15h, 18h, 21h, 00h
-meteo_inst_source = 'ECMWF/ERA5_LAND/HOURLY'
 
 def verifyMeteoAvail(image):
-    DATASET = ee.ImageCollection(meteo_inst_source)
+    DATASET = ee.ImageCollection(Constants.WEATHER_COLLECTION)
 
     time_start = image.get('system:time_start')
     TIME_START_NUM=ee.Number(time_start)
@@ -45,7 +45,7 @@ def verifyMeteoAvail(image):
     return image.set('meteo_count', PREVIOUS_IMAGE.aggregate_count('system:time_start'))
 
 def get_meteorology(image):
-    DATASET = ee.ImageCollection(meteo_inst_source)
+    DATASET = ee.ImageCollection(Constants.WEATHER_COLLECTION)
 
     #LINEAR INTERPOLATION
     time_start = image.get('system:time_start')
@@ -113,7 +113,7 @@ def get_meteorology(image):
     i_Ra_24h=i_Ra_24h.select('Ra_24h').reduce(ee.Reducer.mean());
 
     #INCOMING SHORT-WAVE RADIATION DAILY EAN [W M-2]
-    i_Rs_24h = ee.ImageCollection(meteo_inst_source)\
+    i_Rs_24h = ee.ImageCollection(Constants.WEATHER_COLLECTION)\
                 .filterDate(ee.Date(time_start).advance(-11,'hour'),ee.Date(time_start).advance(13,'hour'))\
                 .select("surface_solar_radiation_downwards_hourly")\
                 .sum()\
@@ -161,9 +161,19 @@ def get_meteorology(image):
         .rename('tdp')
 
     # ACTUAL VAPOR PRESSURE [KPA]
-    ea = tdp.expression(
-        '0.6108 * (exp((17.27 * T_air) / (T_air + 237.3)))',{
-        'T_air': tdp.subtract(273.15)})
+    #PRESSURE [PA] CONVERTED TO KPA
+    i_P_med= NEXT_IMAGE.select('surface_pressure').subtract(PREVIOUS_IMAGE.select('surface_pressure')).multiply(DELTA_TIME).add(PREVIOUS_IMAGE.select('surface_pressure')).divide(ee.Number(1000));
+
+    # SPECIFIC HUMIDITY [KG KG-1]
+    i_q_med =ee.ImageCollection(Constants.WEATHER_NASA_GLDAS_V021_NOAH_G025_T3H).select(['Qair_f_inst'],["specific_humidity"]).filterBounds(image.geometry()).filter(ee.Filter.date(ee.Date(time_start),ee.Date(time_start).advance(1,'day'))).first(); 
+    ea = i_P_med.expression('(1/0.622)*Q*P',{
+            'Q': i_q_med,
+            'P':i_P_med}).rename('i_ea')
+    
+    # TODO: This equation is not correct
+    # ea = tdp.expression(
+    #     '0.6108 * (exp((17.27 * T_air) / (T_air + 237.3)))',{
+    #     'T_air': tdp.subtract(273.15)})
 
     # SATURATED VAPOR PRESSURE [KPA]
     esat = tair_c.expression(
@@ -193,7 +203,7 @@ def retrievePrecip(metadate, location, window_days=10):
     startDate = ee.Date(metadate).advance(-window_days, 'day')
     endDate = ee.Date(metadate).advance(-1, 'day')
 
-    collection = ee.ImageCollection("NOAA/CFSV2/FOR6H")
+    collection = ee.ImageCollection(Constants.NOAA_CFSV2_6H)
 
     # function to sum the values by day
     def sumPrecip(dayOffset, start_):

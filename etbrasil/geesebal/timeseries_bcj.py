@@ -31,13 +31,17 @@ import sys
 
 #FOLDERS
 from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate
-from .masks import (f_cloudMaskL457_SR,f_cloudMaskL8_SR,f_albedoL5L7,f_albedoL8)
+from .masks import (f_albedoL5L7,f_albedoL8)
 from .meteorology import get_meteorology, retrievePrecip, verifyMeteoAvail
 from .tools import (fexp_spec_ind, fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat,fexp_sensible_heat_flux_bcj)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
+from .constants import Constants
+from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8
 
+
+    
 #TIMESRIES FUNCTION
 class TimeSeries_bcj():
 
@@ -81,16 +85,18 @@ class TimeSeries_bcj():
         #ESTIMATE ET DAILY IMAGE AND EXTRACT
         #ET VALUE AT THE COORDINATE
 
-        def retrieveETandMeteo(image):
+        def retrieveETandMeteo(image, debug=False):
             image=ee.Image(image) # just used to ensure correct type casting
-
+            
             #GET INFORMATIONS FROM IMAGE
             _index=image.get('system:index')
+            # print(_index.getInfo())
             cloud_cover=image.get('CLOUD_COVER')
-            LANDSAT_ID=image.get('LANDSAT_ID')
-            landsat_version=ee.String(image.get('SATELLITE'))
+            LANDSAT_ID=image.get('L1_LANDSAT_PRODUCT_ID')
+            landsat_version=ee.String(image.get('SPACECRAFT_ID'))
             zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
-            azimuth_angle=image.get('SOLAR_AZIMUTH_ANGLE')
+            sun_elevation = image.get("SUN_ELEVATION")
+            azimuth_angle=image.get('SUN_AZIMUTH')
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
             _year=ee.Number(_date.get('year'))
@@ -111,57 +117,105 @@ class TimeSeries_bcj():
             etFeature = ee.Feature(self.coordinate.centroid(), {
               'date': date_string,
               'version': landsat_version,
-              'status': 'no status'
+              'status': 'no status',
+                'ET_24h': None,
+                'ET_R_min': None,
+                'ET_R_max': None,
+                'NDVI': None,
+                'AirT_G': None,
+                'LandT_G': None,
+                'ux': None,
+                'UR': None,
+                'z_alt': None,
+                'slope': None,
+                'precip': None
+                
             })
             errmsg = None
+            image_bands_max = image.reduceRegion(
+            reducer=ee.Reducer.max(),
+            geometry=self.coordinate,
+            scale=30,
+            maxPixels=9e14
+            )
+            
+            image_band_features = ee.Feature(None, {
+                "id": LANDSAT_ID,
+                'date': time_start,
+                'version': landsat_version,
+                'status': 'ok',
+                'image_bands_max': image_bands_max
+            })
+            # return etFeature variable and image
+            # return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
 
+            
             #TO AVOID ERRORS DURING THE PROCESS
             try:
                 #GEOMETRY
                 geometryReducer=image.geometry().bounds()
 
-                sun_elevation=ee.Number(90).subtract(zenith_angle)
+                # TODO: In collection2 we can use the sun elevation directly 
+                # sun_elevation=ee.Number(90).subtract(zenith_angle)
 
                 #image= get_meteorology(image)
-
+                
                 #AIR TEMPERATURE [C]
                 T_air = image.select('AirT_G')
-
+                
                 #WIND SPEED [M S-1]
                 ux= image.select('ux_G')
 
                 #RELATIVE HUMIDITY (%)
                 UR = image.select('RH_G')
                 #return ee.Feature(None, {'msg': UR})
-
+               
                 #NET RADIATION 24H [W M-2]
                 Rn24hobs = image.select('Rn24h_G')
 
                 #SRTM DATA ELEVATION
-                SRTM_ELEVATION ='USGS/SRTMGL1_003'
-                srtm = ee.Image(SRTM_ELEVATION).clip(geometryReducer)
+                srtm = ee.Image(Constants.SRTM_ELEVATION_COLLECTION).clip(geometryReducer)
                 z_alt = srtm.select('elevation')
                 slope = ee.Terrain.slope(z_alt)
 
                 #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
                 image=fexp_spec_ind(image)
-
+                
                 #LAND SURFACE TEMPERATURE
+                # TODO: IS THIS CORRECTION NECESSARY? Answer: No, because it uses the brightness temperature
                 image=LST_DEM_correction(image, z_alt, T_air, UR,sun_elevation,_hour,_minutes)
                 T_land = image.select('T_LST_DEM').rename('LandT_G')
-
+                
+                
+                
                 #COLD PIXEL
                 d_cold_pixel=fexp_cold_pixel(image, geometryReducer, p_top_NDVI, p_coldest_Ts)
 
                 #COLD PIXEL NUMBER
                 n_Ts_cold = ee.Number(d_cold_pixel.get('temp'))
-
+                image_bands_max = image.reduceRegion(
+                reducer=ee.Reducer.max(),
+                geometry=self.coordinate,
+                scale=30,
+                maxPixels=9e14
+                )
+                
+                image_band_features = ee.Feature(None, {
+                    "id": LANDSAT_ID,
+                    'date': time_start,
+                    'version': landsat_version,
+                    'status': 'ok',
+                    'image_bands_max': image_bands_max
+                })
+                # return etFeature variable and image
+                # return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
+                
                 #INSTANTANEOUS OUTGOING LONG-WAVE RADIATION [W M-2]
                 image=fexp_radlong_up(image)
-
+                
                 #INSTANTANEOUS INCOMING SHORT-WAVE RADIATION [W M-2]
                 image=fexp_radshort_down(image,z_alt,T_air,UR, sun_elevation)
-
+                
                 #INSTANTANEOUS INCOMING LONGWAVE RADIATION [W M-2]
                 image=fexp_radlong_down(image, n_Ts_cold)
 
@@ -170,19 +224,28 @@ class TimeSeries_bcj():
 
                 #SOIL HEAT FLUX (G) [W M-2]
                 image=fexp_soil_heat(image)
-
+                
                 #HOT PIXEL
                 d_hot_pixel=fexp_hot_pixel(image, geometryReducer,p_lowest_NDVI, p_hottest_Ts)
-
+                
                 #SENSIBLE HEAT FLUX (H) [W M-2]
                 image=fexp_sensible_heat_flux_bcj(image, ux, UR,Rn24hobs,n_Ts_cold,
                                             d_hot_pixel, date_string, geometryReducer)
 
                 #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
                 image=fexp_et(image,Rn24hobs)
-
+                
                 NAME_FINAL=ee.String(LANDSAT_ID).slice(0,5).cat(ee.String(LANDSAT_ID).slice(10,17)).cat(ee.String(LANDSAT_ID).slice(17,25))
-
+                def checkIfCoordinateRepresentAMaskedPoint(image):
+                    is_coord_masked = image.reduceRegion(
+                        reducer=ee.Reducer.first(),
+                        geometry=self.coordinate,
+                        scale=30,
+                        maxPixels=1e14)
+                    
+                if checkIfCoordinateRepresentAMaskedPoint(image):
+                    return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
+                    
                 #EXTRACT VALUES
                 def extractValue(var):
                     return var.reduceRegion(
@@ -202,7 +265,7 @@ class TimeSeries_bcj():
                         geometry=self.coordinate,
                         scale=30,
                         maxPixels=1e14)
-
+                
                 ET_daily=image.select(['ET_24h'],[NAME_FINAL])
                 ET_point = extractValue(ET_daily)
 
@@ -224,6 +287,7 @@ class TimeSeries_bcj():
 
                 ux_daily=ux.select(['ux_G'],[NAME_FINAL])
                 ux_point = extractValue(ux_daily)
+                
 
                 UR_daily=UR.select(['RH_G'],[NAME_FINAL])
                 UR_point = extractValue(UR_daily)
@@ -236,7 +300,7 @@ class TimeSeries_bcj():
 
                 #GET DATE AND DAILY ET
                 ET_point_get = ee.Number(ET_point.get(NAME_FINAL))
-
+               
                 if calcRegionalET:
                     ET_min_point_get = ee.Number(ET_min_point.get(NAME_FINAL))
                     ET_max_point_get = ee.Number(ET_max_point.get(NAME_FINAL))
@@ -247,7 +311,7 @@ class TimeSeries_bcj():
                 NDVI_point_get = ee.Number(NDVI_point.get(NAME_FINAL))
                 T_air_point_get = ee.Number(T_air_point.get(NAME_FINAL))
                 T_land_point_get = ee.Number(T_land_point.get(NAME_FINAL))#.subtract(ee.Number(273.15))
-                                    # conversion from Kelvin to Celsius causes crash when LandT_G is None
+                                  # conversion from Kelvin to Celsius causes crash when LandT_G is None
                                     # so this conversion was moved to client code
                 ux_point_get = ee.Number(ux_point.get(NAME_FINAL))
                 UR_point_get = ee.Number(UR_point.get(NAME_FINAL))
@@ -262,7 +326,7 @@ class TimeSeries_bcj():
                     'status': 'ok',
                     'ET_24h': ET_point_get,
                     'ET_R_min': ET_min_point_get,
-                    'ET_R_max': ET_max_point_get,
+                    'ET_R_max':     ET_max_point_get,
                     'NDVI': NDVI_point_get,
                     'AirT_G': T_air_point_get,
                     'LandT_G': T_land_point_get,
@@ -270,8 +334,12 @@ class TimeSeries_bcj():
                     'UR': UR_point_get,
                     'z_alt': z_alt_point_get,
                     'slope': slope_point_get,
-                    'precip': precip
+                    'precip': 1
                 })
+                
+                return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
+
+                
 
             except:
                 # ERRORS CAN OCCUR WHEN:
@@ -279,7 +347,7 @@ class TimeSeries_bcj():
                 # - ET RETURN NULL IF AT THE POINT WAS APPLIED MASK CLOUD.
                 # - CONNECTION ISSUES.
                 # - SEBAL DOESN'T FIND A REASONABLE LINEAR RELATIONSHIP (dT).
-                raise
+                raise Exception(sys.exc_info()[0])
                 etFeature = ee.Feature(self.coordinate.centroid(), {
                     'date': date_string,
                     'version': landsat_version,
@@ -297,28 +365,52 @@ class TimeSeries_bcj():
                     'precip': None
                 })
 
-            return etFeature
-
-        fc5 = self.collection_l5.map(f_cloudMaskL457_SR) \
-                                .map(f_albedoL5L7) \
-                                .map(verifyMeteoAvail) \
-                                .filter(ee.Filter.gt('meteo_count', 0)) \
-                                .map(get_meteorology) \
-                                .map(retrieveETandMeteo)
+            
+            if(debug):
+                image_bands_max = image.reduceRegion(
+                reducer=ee.Reducer.max(),
+                geometry=self.coordinate,
+                scale=30,
+                maxPixels=9e14
+                )
+                
+                image_band_features = ee.Feature(None, {
+                    "id": LANDSAT_ID,
+                    'date': time_start,
+                    'version': landsat_version,
+                    'status': 'ok',
+                    'image_bands_max': image_bands_max
+                })
+                # return etFeature variable and image
+                return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
+            else:
+                return etFeature
+           
+        
+    
+        # .map(prepSrLandsat5and7) \
+        fc5 = self.collection_l5.map(f_albedoL8).map(verifyMeteoAvail).filter(ee.Filter.gt('meteo_count', 0)).map(get_meteorology).map(lambda image: retrieveETandMeteo(image,debug=True))
+        
+                                
         self.ETandMeteo = fc5
-
-        fc7 = self.collection_l7.map(f_cloudMaskL457_SR) \
-                                .map(f_albedoL5L7) \
+           
+        # .map(prepSrLandsat5and7) \
+        fc7 = self.collection_l7.map(f_albedoL5L7) \
                                 .map(verifyMeteoAvail) \
                                 .filter(ee.Filter.gt('meteo_count', 0)) \
                                 .map(get_meteorology) \
-                                .map(retrieveETandMeteo)
+                                .map(lambda image: retrieveETandMeteo(image,debug=True))
+                                # .map(printInfo)
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
-
-        fc8 = self.collection_l8.map(f_cloudMaskL8_SR) \
-                                .map(f_albedoL8) \
-                                .map(verifyMeteoAvail) \
-                                .filter(ee.Filter.gt('meteo_count', 0)) \
-                                .map(get_meteorology) \
-                                .map(retrieveETandMeteo)
+        # # .map(prepSrLandsat8) \
+        # # TODO: Try to remove this
+        # # Reduce the collection to a collection of booleans, where each boolean indicates whether the corresponding image has any `None` values.
+        
+       
+            
+        
+        fc8 = self.collection_l8.map(f_albedoL8).map(verifyMeteoAvail).filter(ee.Filter.gt('meteo_count', 0)).map(get_meteorology).map(lambda image: retrieveETandMeteo(image,debug=True))
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
+        # self.ETandMeteo = self.ETandMeteo.merge(fc8)
+        # self.ETandMeteo = fc8
+        # self.ETandMeteo = fc
