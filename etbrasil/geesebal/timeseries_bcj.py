@@ -334,7 +334,7 @@ class TimeSeries_bcj():
                     'UR': UR_point_get,
                     'z_alt': z_alt_point_get,
                     'slope': slope_point_get,
-                    'precip': 1
+                    'precip': precip,
                 })
                 
                 return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
@@ -388,29 +388,30 @@ class TimeSeries_bcj():
            
         
     
-        # .map(prepSrLandsat5and7) \
-        fc5 = self.collection_l5.map(f_albedoL8).map(verifyMeteoAvail).filter(ee.Filter.gt('meteo_count', 0)).map(get_meteorology).map(lambda image: retrieveETandMeteo(image,debug=True))
-        
-                                
+        fc5 = (self.collection_l5.
+                    map(f_albedoL8)
+                    .map(verifyMeteoAvail)
+                    .filter(ee.Filter.gt('meteo_count', 0))
+                    .map(get_meteorology)
+                    .map(lambda image: retrieveETandMeteo(image,debug=True))
+        )
         self.ETandMeteo = fc5
            
-        # .map(prepSrLandsat5and7) \
-        fc7 = self.collection_l7.map(f_albedoL5L7) \
-                                .map(verifyMeteoAvail) \
-                                .filter(ee.Filter.gt('meteo_count', 0)) \
-                                .map(get_meteorology) \
-                                .map(lambda image: retrieveETandMeteo(image,debug=True))
-                                # .map(printInfo)
+        fc7 = (self.collection_l7
+                    .map(f_albedoL5L7)
+                    .map(verifyMeteoAvail)
+                    .filter(ee.Filter.gt('meteo_count', 0))
+                    .map(get_meteorology)
+                    .map(lambda image: retrieveETandMeteo(image,debug=True))
+                    # .map(printInfo)
+        )
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
-        # # .map(prepSrLandsat8) \
-        # # TODO: Try to remove this
-        # # Reduce the collection to a collection of booleans, where each boolean indicates whether the corresponding image has any `None` values.
         
-       
-            
-        
-        fc8 = self.collection_l8.map(f_albedoL8).map(verifyMeteoAvail).filter(ee.Filter.gt('meteo_count', 0)).map(get_meteorology).map(lambda image: retrieveETandMeteo(image,debug=True))
+        fc8 = (self.collection_l8
+                    .map(f_albedoL8)
+                    .map(verifyMeteoAvail)
+                    .filter(ee.Filter.gt('meteo_count', 0))
+                    .map(get_meteorology)
+                    .map(lambda image: retrieveETandMeteo(image,debug=True))
+        )
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
-        # self.ETandMeteo = self.ETandMeteo.merge(fc8)
-        # self.ETandMeteo = fc8
-        # self.ETandMeteo = fc
