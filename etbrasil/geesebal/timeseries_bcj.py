@@ -61,7 +61,8 @@ class TimeSeries_bcj():
                  Ts_cold=20,
                  NDVI_hot=10,
                  Ts_hot=20,
-                 calcRegionalET=False):
+                 calcRegionalET=False,
+                 debug=False):
 
         #output variable
         self.ETandMeteo = None
@@ -70,11 +71,8 @@ class TimeSeries_bcj():
         self.coordinate=coordinate
         self.cloud_cover=cloud_cover
         self.start_date = ee.Date.fromYMD(year_i,month_i,day_i)
-        self.i_date=date(year_i,month_i,day_i)
-        self.end_date=date(year_e,month_e,day_e)
-        self.n_search_days=self.end_date - self.i_date
-        self.n_search_days=self.n_search_days.days
-        self.end_date = self.start_date.advance(self.n_search_days, 'day')
+        self.i_date = ee.Date.fromYMD(year_i,month_i,day_i)
+        self.end_date = ee.Date.fromYMD(year_e,month_e,day_e)
 
         #COLLECTIONS
         self.collection_l5=fexp_landsat_5Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
@@ -90,7 +88,6 @@ class TimeSeries_bcj():
             
             #GET INFORMATIONS FROM IMAGE
             _index=image.get('system:index')
-            # print(_index.getInfo())
             cloud_cover=image.get('CLOUD_COVER')
             LANDSAT_ID=image.get('L1_LANDSAT_PRODUCT_ID')
             landsat_version=ee.String(image.get('SPACECRAFT_ID'))
@@ -155,11 +152,6 @@ class TimeSeries_bcj():
                 #GEOMETRY
                 geometryReducer=image.geometry().bounds()
 
-                # TODO: In collection2 we can use the sun elevation directly 
-                # sun_elevation=ee.Number(90).subtract(zenith_angle)
-
-                #image= get_meteorology(image)
-                
                 #AIR TEMPERATURE [C]
                 T_air = image.select('AirT_G')
                 
@@ -236,16 +228,7 @@ class TimeSeries_bcj():
                 image=fexp_et(image,Rn24hobs)
                 
                 NAME_FINAL=ee.String(LANDSAT_ID).slice(0,5).cat(ee.String(LANDSAT_ID).slice(10,17)).cat(ee.String(LANDSAT_ID).slice(17,25))
-                def checkIfCoordinateRepresentAMaskedPoint(image):
-                    is_coord_masked = image.reduceRegion(
-                        reducer=ee.Reducer.first(),
-                        geometry=self.coordinate,
-                        scale=30,
-                        maxPixels=1e14)
-                    
-                if checkIfCoordinateRepresentAMaskedPoint(image):
-                    return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
-                    
+
                 #EXTRACT VALUES
                 def extractValue(var):
                     return var.reduceRegion(
@@ -336,10 +319,6 @@ class TimeSeries_bcj():
                     'slope': slope_point_get,
                     'precip': precip,
                 })
-                
-                return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
-
-                
 
             except:
                 # ERRORS CAN OCCUR WHEN:
@@ -383,8 +362,8 @@ class TimeSeries_bcj():
                 })
                 # return etFeature variable and image
                 return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
-            else:
-                return etFeature
+            
+            return etFeature
            
         
     
@@ -393,7 +372,7 @@ class TimeSeries_bcj():
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
                     .map(get_meteorology)
-                    .map(lambda image: retrieveETandMeteo(image,debug=True))
+                    .map(lambda image: retrieveETandMeteo(image,debug=debug))
         )
         self.ETandMeteo = fc5
            
@@ -402,8 +381,7 @@ class TimeSeries_bcj():
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
                     .map(get_meteorology)
-                    .map(lambda image: retrieveETandMeteo(image,debug=True))
-                    # .map(printInfo)
+                    .map(lambda image: retrieveETandMeteo(image,debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
         
@@ -412,6 +390,6 @@ class TimeSeries_bcj():
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
                     .map(get_meteorology)
-                    .map(lambda image: retrieveETandMeteo(image,debug=True))
+                    .map(lambda image: retrieveETandMeteo(image,debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
