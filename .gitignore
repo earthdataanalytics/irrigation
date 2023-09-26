@@ -1,6 +1,10 @@
 # CUSTOM 
 
 
+**.DS_Store
+**.pyc
+*.pyc
+
 images/
 training/
 data/
