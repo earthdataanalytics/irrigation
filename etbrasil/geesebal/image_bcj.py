@@ -68,6 +68,7 @@ class Image_bcj():
             #GET INFORMATIONS FROM IMAGE
             image = ee.Image(image)
             zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
+            sun_elevation = image.get("SUN_ELEVATION")
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
             _hour=ee.Number(_date.get('hour'))
@@ -82,8 +83,6 @@ class Image_bcj():
 
             #GEOMETRY
             geometryReducer=image.geometry().bounds()
-
-            sun_elevation=ee.Number(90).subtract(zenith_angle)
 
             #AIR TEMPERATURE [C]
             T_air = image.select('AirT_G');
