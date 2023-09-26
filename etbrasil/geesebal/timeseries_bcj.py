@@ -129,23 +129,6 @@ class TimeSeries_bcj():
                 
             })
             errmsg = None
-            image_bands_max = image.reduceRegion(
-            reducer=ee.Reducer.max(),
-            geometry=self.coordinate,
-            scale=30,
-            maxPixels=9e14
-            )
-            
-            image_band_features = ee.Feature(None, {
-                "id": LANDSAT_ID,
-                'date': time_start,
-                'version': landsat_version,
-                'status': 'ok',
-                'image_bands_max': image_bands_max
-            })
-            # return etFeature variable and image
-            # return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
-
             
             #TO AVOID ERRORS DURING THE PROCESS
             try:
@@ -185,22 +168,6 @@ class TimeSeries_bcj():
 
                 #COLD PIXEL NUMBER
                 n_Ts_cold = ee.Number(d_cold_pixel.get('temp'))
-                image_bands_max = image.reduceRegion(
-                reducer=ee.Reducer.max(),
-                geometry=self.coordinate,
-                scale=30,
-                maxPixels=9e14
-                )
-                
-                image_band_features = ee.Feature(None, {
-                    "id": LANDSAT_ID,
-                    'date': time_start,
-                    'version': landsat_version,
-                    'status': 'ok',
-                    'image_bands_max': image_bands_max
-                })
-                # return etFeature variable and image
-                # return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
                 
                 #INSTANTANEOUS OUTGOING LONG-WAVE RADIATION [W M-2]
                 image=fexp_radlong_up(image)
