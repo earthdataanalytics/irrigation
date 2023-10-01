@@ -1,5 +1,8 @@
 # CUSTOM 
 
+runs/
+raw_data/
+outputmaps/
 
 **.DS_Store
 **.pyc
