@@ -26,7 +26,7 @@ from .constants import Constants
 
 
 # SPECTRAL INDICES MODULE
-def fexp_spec_ind(image):
+def fexp_spec_ind(image, scale=30):
     # NORMALIZED DIFFERENCE VEGETATION INDEX (NDVI)
     ndvi = image.normalizedDifference(["NIR", "R"]).rename("NDVI")
 
@@ -86,7 +86,7 @@ def fexp_spec_ind(image):
     # RESCALED BRIGHTNESS TEMPERATURE
     # brt_r = image.select('BRT').divide(10).rename('BRT_R');
     proj = image.select("B").projection()
-    latlon = ee.Image.pixelLonLat().reproject(proj, scale=30)
+    latlon = ee.Image.pixelLonLat().reproject(proj, scale=scale)
     coords = latlon.select(["longitude", "latitude"])
 
     # FOR FUTHER USE
@@ -551,7 +551,7 @@ def fexp_soil_heat(image):
 
 
 def fexp_sensible_heat_flux(
-    image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel, date_string, refpoly
+    image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel, date_string, refpoly, scale=30
 ):
     # VEGETATION HEIGHTS  [M]
     n_veg_hight = ee.Number(3)
@@ -661,7 +661,7 @@ def fexp_sensible_heat_flux(
         d_rah_hot = i_rah.reduceRegion(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
-            scale=30,
+            scale=scale,
             maxPixels=9000000000,
         )
 
@@ -709,7 +709,7 @@ def fexp_sensible_heat_flux(
         d_H_int = i_H_int.reduceRegion(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
-            scale=30,
+            scale=scale,
             maxPixels=9000000000,
         )
         n_H_int = ee.Number(d_H_int.get("H"))
@@ -857,7 +857,7 @@ def fexp_sensible_heat_flux(
 
 
 def fexp_sensible_heat_flux_bcj(
-    image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel, date_string, refpoly
+    image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel, date_string, refpoly, scale=30
 ):
     # VEGETATION HEIGHTS  [M]
     n_veg_hight = ee.Number(3)
@@ -966,7 +966,7 @@ def fexp_sensible_heat_flux_bcj(
         # AERODYNAMIC RESISTANCE TO HEAT TRANSPORT IN HOT PIXEL
         # BCJ-can decrease maxpixels? what buffersize needed?
         d_rah_hot = i_rah.reduceRegion(
-            reducer=ee.Reducer.first(), geometry=p_hot_pix, scale=30, maxPixels=5556
+            reducer=ee.Reducer.first(), geometry=p_hot_pix, scale=scale, maxPixels=5556
         )  # 5556 pixels * 900 sqm / pixel = 5e6 sqm = 5 sq km
         # maxPixels = 9000000000) # original
 

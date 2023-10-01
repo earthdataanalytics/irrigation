@@ -26,7 +26,9 @@ def extractData(aoi, aoi_label,
                 end_yr=2021, end_mo=8, end_dy=31,
                 max_cloud_cover=30,
                 buffer_range=50,
-                calc_ET_region=False):
+                calc_ET_region=False,
+                scale=30,
+    ):
 
     # buffer_range is in meters, max 7000 for GEE limits.
     # must be set tight around sample locations to limit zone from
@@ -67,7 +69,8 @@ def extractData(aoi, aoi_label,
                                         start_yr+yr_inc, end_mo, end_dy,
                                         max_cloud_cover, single_location,
                                         buffersize=buffsize,
-                                        calcRegionalET=calc_ET_region
+                                        calcRegionalET=calc_ET_region,
+                                        scale=scale
                                      )
 
             sebalTS.ETandMeteo = sebalTS.ETandMeteo \
@@ -87,6 +90,7 @@ def extractMonthlyData(aoi, aoi_label,
                         buffer_range=50,
                         calc_ET_region=False,
                         restart_index=-1,
+                        scale=30
                         ):
 
     # ======================
@@ -147,7 +151,8 @@ def extractMonthlyData(aoi, aoi_label,
                                     end_yr, end_mo, end_dy,
                                     max_cloud_cover, sample_location,
                                     buffersize=buffsize,
-                                    calcRegionalET=calc_ET_region
+                                    calcRegionalET=calc_ET_region,
+                                    scale=scale
                                  )
 
         sebalTS.ETandMeteo = sebalTS.ETandMeteo \

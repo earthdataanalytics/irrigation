@@ -62,7 +62,9 @@ class TimeSeries_bcj():
                  NDVI_hot=10,
                  Ts_hot=20,
                  calcRegionalET=False,
-                 debug=False):
+                 debug=False,
+                 scale=30
+        ):
 
         #output variable
         self.ETandMeteo = None
@@ -154,7 +156,7 @@ class TimeSeries_bcj():
                 slope = ee.Terrain.slope(z_alt)
 
                 #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
-                image=fexp_spec_ind(image)
+                image=fexp_spec_ind(image, scale=scale)
                 
                 #LAND SURFACE TEMPERATURE
                 # TODO: IS THIS CORRECTION NECESSARY? Answer: No, because it uses the brightness temperature
@@ -189,7 +191,7 @@ class TimeSeries_bcj():
                 
                 #SENSIBLE HEAT FLUX (H) [W M-2]
                 image=fexp_sensible_heat_flux_bcj(image, ux, UR,Rn24hobs,n_Ts_cold,
-                                            d_hot_pixel, date_string, geometryReducer)
+                                            d_hot_pixel, date_string, geometryReducer, scale=scale)
 
                 #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
                 image=fexp_et(image,Rn24hobs)
@@ -201,19 +203,21 @@ class TimeSeries_bcj():
                     return var.reduceRegion(
                         reducer=ee.Reducer.first(),
                         geometry=self.coordinate,
-                        scale=30,
+                        scale=scale,
                         maxPixels=1e14)
+
                 def extractMinValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.min(),
                         geometry=self.coordinate,
-                        scale=30,
+                        scale=scale,
                         maxPixels=1e14)
+
                 def extractMaxValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.max(),
                         geometry=self.coordinate,
-                        scale=30,
+                        scale=scale,
                         maxPixels=1e14)
                 
                 ET_daily=image.select(['ET_24h'],[NAME_FINAL])
@@ -268,7 +272,7 @@ class TimeSeries_bcj():
                 z_alt_point_get = ee.Number(z_alt_point.get(NAME_FINAL))
                 slope_point_get = ee.Number(slope_point.get(NAME_FINAL))
 
-                precip = retrievePrecip(date_string, self.coordinate)
+                precip = retrievePrecip(date_string, self.coordinate, scale=scale)
 
                 etFeature = ee.Feature(self.coordinate.centroid(), {
                     'date': date_string,
@@ -316,7 +320,7 @@ class TimeSeries_bcj():
                 image_bands_max = image.reduceRegion(
                 reducer=ee.Reducer.max(),
                 geometry=self.coordinate,
-                scale=30,
+                scale=scale,
                 maxPixels=9e14
                 )
                 
@@ -338,8 +342,8 @@ class TimeSeries_bcj():
                     map(f_albedoL8)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(get_meteorology)
-                    .map(lambda image: retrieveETandMeteo(image,debug=debug))
+                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = fc5
            
@@ -347,8 +351,8 @@ class TimeSeries_bcj():
                     .map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(get_meteorology)
-                    .map(lambda image: retrieveETandMeteo(image,debug=debug))
+                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
         
@@ -356,7 +360,7 @@ class TimeSeries_bcj():
                     .map(f_albedoL8)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(get_meteorology)
-                    .map(lambda image: retrieveETandMeteo(image,debug=debug))
+                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
