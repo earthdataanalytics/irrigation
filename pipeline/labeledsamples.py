@@ -29,12 +29,12 @@ def getRawLabeledData():
     # see Metadata.docx
     #       POINT_TYPE 0 = rainfed
     #       POINT_TYPE 1 = irrigated
-    irr_east = geemap.shp_to_ee('./lanid/irrSamples_eastCONUS.shp') \
+    irr_east = geemap.shp_to_ee('./pipeline/lanid/irrSamples_eastCONUS.shp') \
                         .map(lambda x: x.set('POINT_LOC', 'us_east')) \
                         .map(lambda x: x.set('POINT_TYPE', 1)) \
                         .map(lambda x: x.set('POINT_SRC', 'LANID'))
 
-    rain_east = geemap.shp_to_ee('./lanid/rainfedSamples_eastCONUS.shp') \
+    rain_east = geemap.shp_to_ee('./pipeline/lanid/rainfedSamples_eastCONUS.shp') \
                         .map(lambda x: x.set('POINT_LOC', 'us_east')) \
                         .map(lambda x: x.set('POINT_TYPE', 0)) \
                         .map(lambda x: x.set('POINT_SRC', 'LANID'))
