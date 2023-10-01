@@ -5,10 +5,10 @@ import ee
 # add the path to the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../geesebal')))
-from geesebal import TimeSeries_bcj
+from geesebal import TimeSeries
 
 
-# sebalTS = TimeSeries_bcj(start_yr+yr_inc, start_mo, start_dy,
+# sebalTS = TimeSeries(start_yr+yr_inc, start_mo, start_dy,
 #                                         start_yr+yr_inc, end_mo, end_dy,
 #                                         max_cloud_cover, single_location,
 #                                         buffersize=buffsize,
@@ -20,7 +20,7 @@ from geesebal import TimeSeries_bcj
 # evapotranspirationAndMeteo = sebalTS.ETandMeteo
 
 # create a test class
-class TestTimeSeries_bcj(unittest.TestCase):
+class TestTimeSeries(unittest.TestCase):
     ## class to run code on the top
     def setUp(self):
         self.year_i = 2018
@@ -46,7 +46,7 @@ class TestTimeSeries_bcj(unittest.TestCase):
         self.coordinates = ee.Geometry.Point([-121.79909699471962, 38.53358811531448])
        
     
-    def test_TimeSeries_bcj(self):
+    def test_TimeSeries(self):
         self.setUp()
         idx = 0
         aoi = ee.FeatureCollection(self.geometry)
@@ -56,7 +56,7 @@ class TestTimeSeries_bcj(unittest.TestCase):
         locs_list = aoi.toList(max_points)
         loc_type = ee.Feature(locs_list.get(idx)).get('POINT_TYPE')
         
-        sebalTS =  TimeSeries_bcj(
+        sebalTS =  TimeSeries(
             year_i=self.year_i,
             month_i=self.month_i,
             day_i=self.day_i,

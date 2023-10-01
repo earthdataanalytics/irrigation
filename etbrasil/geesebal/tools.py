@@ -856,7 +856,7 @@ def fexp_sensible_heat_flux(
     # SENSIBLE HEAT FLUX (H) [W M-2]
 
 
-def fexp_sensible_heat_flux_bcj(
+def fexp_sensible_heat_flux_ver_server(
     image, ux, UR, Rn24hobs, n_Ts_cold, d_hot_pixel, date_string, refpoly, scale=30
 ):
     # VEGETATION HEIGHTS  [M]

@@ -2,7 +2,7 @@ import ee
 from tqdm import tqdm
 from datetime import datetime, timedelta
 
-from etbrasil.geesebal import TimeSeries_bcj
+from etbrasil.geesebal import TimeSeries
 from pipeline import cropmasks as msk
 
 def exportETdata(etFC, lbl, loc, folder='irrigation'):
@@ -65,7 +65,7 @@ def extractData(aoi, aoi_label,
             if calc_ET_region:
                 buffsize = 5000
 
-            sebalTS = TimeSeries_bcj(start_yr+yr_inc, start_mo, start_dy,
+            sebalTS = TimeSeries(start_yr+yr_inc, start_mo, start_dy,
                                         start_yr+yr_inc, end_mo, end_dy,
                                         max_cloud_cover, single_location,
                                         buffersize=buffsize,
@@ -147,7 +147,7 @@ def extractMonthlyData(aoi, aoi_label,
         end_mo = ee.Number.parse(end_date.format('MM'))
         end_dy = ee.Number.parse(end_date.format('dd'))
 
-        sebalTS = TimeSeries_bcj(start_yr, start_mo, start_dy,
+        sebalTS = TimeSeries(start_yr, start_mo, start_dy,
                                     end_yr, end_mo, end_dy,
                                     max_cloud_cover, sample_location,
                                     buffersize=buffsize,
