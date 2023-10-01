@@ -290,8 +290,8 @@ def parse_opt():
     parser.add_argument('--nofilterndvi', action='store_true', help='Disable NDVI filter')
     parser.add_argument('--nofilterrain', action='store_true', help='Disable Rain filter')
     parser.add_argument('--calcETregion', action='store_true', help='Use regionalized ET')
-    parser.add_argument('--inpath', required=False, default='../../runs/', help='Path for input files')
-    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
+    parser.add_argument('--inpath', required=False, default='../runs/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
     parser.add_argument('--nosavemodel', action='store_true', help='Disable saving model')
     return parser.parse_args()
 

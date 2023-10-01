@@ -159,8 +159,8 @@ def parse_opt():
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
     parser.add_argument('--nofilterndvi', action='store_true', help='Disable NDVI filter')
     parser.add_argument('--nofilterrain', action='store_true', help='Disable Rain filter')
-    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
-    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
+    parser.add_argument('--inpath', required=False, default='../raw_data/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
     return parser.parse_args()
 
 if __name__ == "__main__":

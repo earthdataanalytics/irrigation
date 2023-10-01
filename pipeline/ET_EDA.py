@@ -179,8 +179,8 @@ def analyze(datafile=None,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datafile', required=True, help='Filename of ET data to process')
-    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
-    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
+    parser.add_argument('--inpath', required=False, default='../raw_data/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
     parser.add_argument('--verbose', action='store_true', help='Print output to console')
     return parser.parse_args()
 

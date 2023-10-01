@@ -104,8 +104,8 @@ def eval(inpath='',
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--inpath', required=False, default='../../runs/', help='Path for input files')
-    parser.add_argument('--outpath', required=False, default='../../crosseval/', help='Path for output files')
+    parser.add_argument('--inpath', required=False, default='../runs/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../crosseval/', help='Path for output files')
     return parser.parse_args()
 
 if __name__ == "__main__":
