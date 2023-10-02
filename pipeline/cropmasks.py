@@ -20,13 +20,20 @@ def createMODISmask(aoi=None):
     return mask
 
 def createGFSADmask(aoi=None):
-    # required setting up a bucket on google cloud to host the raster images
+    # required setting up a bucket on google cloud to host the raster images which were sourced from:
+    #        https://www.usgs.gov/centers/western-geographic-science-center/science/global-food-security-support-analysis-data-30-m
+    # the data is for the year 2015
     # requires copying credentials to access the bucket
     import os
     from google.cloud import storage
 
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = './second-impact-342800-51af159903ca.json'
-    client = storage.Client()
+    try:
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = './pipeline/second-impact-342800-51af159903ca.json'
+        client = storage.Client()
+    except:
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'second-impact-342800-51af159903ca.json'
+        client = storage.Client()
+
     bucket = client.bucket('eda_gfs')
     blobs = list(bucket.list_blobs())
     gfsad_tilelist = list(np.array([x.path.split('/')[-1:] for x in blobs]).squeeze())

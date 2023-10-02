@@ -59,8 +59,8 @@ def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--all', action='store_true', help='Generate models for all data files in inpath')
     parser.add_argument('--datafile', required=False, help='Filename of ET data to process')
-    parser.add_argument('--inpath', required=False, default='../../raw_data/', help='Path for input files')
-    parser.add_argument('--outpath', required=False, default='../../runs/', help='Path for output files')
+    parser.add_argument('--inpath', required=False, default='../raw_data/', help='Path for input files')
+    parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
     return parser.parse_args()
 
 if __name__ == "__main__":
