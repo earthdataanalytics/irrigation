@@ -27,8 +27,13 @@ def createGFSADmask(aoi=None):
     import os
     from google.cloud import storage
 
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = './pipeline/second-impact-342800-51af159903ca.json'
-    client = storage.Client()
+    try:
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = './pipeline/second-impact-342800-51af159903ca.json'
+        client = storage.Client()
+    except:
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'second-impact-342800-51af159903ca.json'
+        client = storage.Client()
+
     bucket = client.bucket('eda_gfs')
     blobs = list(bucket.list_blobs())
     gfsad_tilelist = list(np.array([x.path.split('/')[-1:] for x in blobs]).squeeze())

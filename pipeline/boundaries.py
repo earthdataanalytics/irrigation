@@ -23,9 +23,14 @@ spain = ee.FeatureCollection('USDOS/LSIB_SIMPLE/2017').filterMetadata('country_c
 
 # specific areas of interest
 #!wget https://eric.clst.org/assets/wiki/uploads/Stuff/gz_2010_us_040_00_20m.json
-california = geemap.geojson_to_ee('gz_2010_us_040_00_20m.json') \
-                    .filterMetadata('NAME', 'equals', 'California') \
-                    .set('aoi_label', 'california')
+try:
+    california = geemap.geojson_to_ee('./pipeline/gz_2010_us_040_00_20m.json') \
+                        .filterMetadata('NAME', 'equals', 'California') \
+                        .set('aoi_label', 'california')
+except:
+    california = geemap.geojson_to_ee('gz_2010_us_040_00_20m.json') \
+                        .filterMetadata('NAME', 'equals', 'California') \
+                        .set('aoi_label', 'california')
 
 # these are custom-files made by copying geometries created on https://code.earthengine.google.com and printed to the console
 
