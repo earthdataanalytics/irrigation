@@ -35,8 +35,9 @@ import argparse
 import sys
 
 import ee
-#ee.Authenticate() # Uncomment this line when first running the notebook in a new environment
-ee.Initialize()
+#service_account = 'data-access@second-impact-342800.iam.gserviceaccount.com'
+#creds = ee.ServiceAccountCredentials(service_account, '../second-impact-342800-51af159903ca.json')
+#ee.Initialize(creds)
 #import geemap.foliumap as geemap
 
 import numpy as np
