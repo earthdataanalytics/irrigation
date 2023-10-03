@@ -67,7 +67,8 @@ logging.basicConfig(format='%(asctime)s %(message)s',
 def analyze(datafile=None,
         inpath='',
         outpath='',
-        verbose=False):
+        verbose=False,
+        showPlot=False):
 
     df = pd.DataFrame()
     zf = ZipFile(inpath + datafile)
@@ -128,7 +129,8 @@ def analyze(datafile=None,
     ax[0].hist(df.loc_idx)
     ax[1].hist(df.sort_values('yyyy').yyyy)
     ax[2].hist(df.sort_values('mm').mm)
-    plt.show()
+    if showPlot:
+        plt.show()
     plt.savefig(path + 'histogram.png')
 
     # NDVI
@@ -183,6 +185,7 @@ def parse_opt():
     parser.add_argument('--inpath', required=False, default='../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
     parser.add_argument('--verbose', action='store_true', help='Print output to console')
+    parser.add_argument('--showPlot', action='store_true', help='Display EDA plots (this will freeze processing until popup window is dismissed)')
     return parser.parse_args()
 
 if __name__ == "__main__":
