@@ -30,6 +30,11 @@ import sys
 import os
 import glob
 
+import ee
+service_account = 'data-access@second-impact-342800.iam.gserviceaccount.com'
+creds = ee.ServiceAccountCredentials(service_account, '../second-impact-342800-51af159903ca.json')
+ee.Initialize(creds)
+
 # custom libraries
 import ET_EDA as eda
 import ET_Featurization as feat
@@ -47,7 +52,8 @@ def run(aoi=None,
         noeda=False,
         infer=False,
         nosavemodel=False,
-        verbose=False):
+        verbose=False,
+        showPlot=False):
 
     if extract:
         if (not aoi) or (not os.path.exists(aoi)):
@@ -69,7 +75,7 @@ def run(aoi=None,
     if (not noeda):
         if verbose:
             print('EDA Step')
-        eda.analyze(datafile=datafile, inpath=inpath, outpath=newpath, verbose=verbose)
+        eda.analyze(datafile=datafile, inpath=inpath, outpath=newpath, verbose=verbose, showPlot=showPlot)
 
     if verbose:
         print('Featurization Step')
@@ -105,6 +111,7 @@ def parse_opt():
     parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
     parser.add_argument('--nosavemodel', action='store_true', help='Disable saving model')
     parser.add_argument('--verbose', action='store_true', help='Print output to console')
+    parser.add_argument('--showPlot', action='store_true', help='Display EDA plots (this will freeze processing until popup window is dismissed)')
     return parser.parse_args()
 
 if __name__ == "__main__":

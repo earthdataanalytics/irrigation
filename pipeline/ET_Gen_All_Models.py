@@ -27,7 +27,8 @@ import ET_Driver as driver
 def run(all=False,
         datafile=None,
         inpath='',
-        outpath=''):
+        outpath='',
+        showPlot=False):
 
     if (not all) and (not datafile):
         print('Requires either specifying a datafile or using the --all flag')
@@ -53,7 +54,8 @@ def run(all=False,
                           outpath=outpath,
                           nofilterndvi=nopt,
                           nofilterrain=ropt,
-                          calcETregion=copt)
+                          calcETregion=copt,
+                          showPlot=showPlot)
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -61,6 +63,7 @@ def parse_opt():
     parser.add_argument('--datafile', required=False, help='Filename of ET data to process')
     parser.add_argument('--inpath', required=False, default='../raw_data/', help='Path for input files')
     parser.add_argument('--outpath', required=False, default='../runs/', help='Path for output files')
+    parser.add_argument('--showPlot', action='store_true', help='Display EDA plots (this will freeze processing until popup window is dismissed)')
     return parser.parse_args()
 
 if __name__ == "__main__":
