@@ -1,9 +1,15 @@
 class Constants:
 
     # LANDSAT COLLECTIONS
+    LANDSAT_COLLECTION_9 = "LANDSAT/LC09/C02/T1_L2"
     LANDSAT_COLLECTION_8 = "LANDSAT/LC08/C02/T1_L2"
     LANDSAT_COLLECTION_7 = "LANDSAT/LE07/C02/T1_L2"
     LANDSAT_COLLECTION_5 = "LANDSAT/LT05/C02/T1_L2"
+    
+    LANDSAT_9_BANDS = {
+        "OFFICIAL": ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7", "ST_B10"],
+        "CUSTOM": ["UB", "B", "GR", "R", "NIR", "SWIR_1", "SWIR_2", "T_LST"],
+    }
     
     LANDSAT_8_BANDS = {
         "OFFICIAL": ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7", "ST_B10"],

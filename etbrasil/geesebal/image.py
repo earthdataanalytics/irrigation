@@ -26,8 +26,8 @@ import ee
 #ee.Initialize()
 
 #FOLDERS
-from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate
-from .masks import (f_albedoL5L7,f_albedoL8)
+from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate, fexp_landsat_9Coordinate
+from .masks import (f_albedoL5L7,f_albedoL8_9)
 from .meteorology import get_meteorology, retrievePrecipImage, verifyMeteoAvail
 from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat, fexp_sensible_heat_flux,
@@ -35,7 +35,7 @@ fexp_sensible_heat_flux_ver_server)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
 from .constants import Constants
-from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8
+from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
 #IMAGE FUNCTION
 class Image():
 
@@ -64,6 +64,7 @@ class Image():
         collection_l5=fexp_landsat_5Coordinate(window_start, window_end, aoi, cloud_max)
         collection_l7=fexp_landsat_7Coordinate(window_start, window_end, aoi, cloud_max)
         collection_l8=fexp_landsat_8Coordinate(window_start, window_end, aoi, cloud_max)
+        collection_l9=fexp_landsat_9Coordinate(window_start, window_end, aoi, cloud_max)
 
         def retrieveETandMeteo(image):
             #GET INFORMATIONS FROM IMAGE
@@ -196,10 +197,20 @@ class Image():
 
         ic8 = (
             collection_l8
-                .map(f_albedoL8)
+                .map(f_albedoL8_9)
                 .map(verifyMeteoAvail)
                 .filter(ee.Filter.gt('meteo_count', 0))
                 .map(lambda image: get_meteorology(image, scale=scale))
                 .map(retrieveETandMeteo)
         )
         self.ETandMeteo = self.ETandMeteo.merge(ic8)
+
+        ic9 = (
+            collection_l9
+                .map(f_albedoL8_9)
+                .map(verifyMeteoAvail)
+                .filter(ee.Filter.gt('meteo_count', 0))
+                .map(lambda image: get_meteorology(image, scale=scale))
+                .map(retrieveETandMeteo)
+        )
+        self.ETandMeteo = self.ETandMeteo.merge(ic9)

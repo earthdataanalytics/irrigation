@@ -57,9 +57,9 @@ def f_albedoL5L7(image):
     return image.addBands(alfa);
 
 #ALBEDO
-#USING TASUMI ET AL. (2008) METHOD FOR LANDSAT 8
+#USING TASUMI ET AL. (2008) METHOD FOR LANDSAT 8 and 9
 #COEFFICIENTS FROM KE ET AL. (2016)
-def f_albedoL8(image):
+def f_albedoL8_9(image):
     alfa = image.expression(
       '(0.130*B1) + (0.115*B2) + (0.143*B3) + (0.180*B4) + (0.281*B5) + (0.108*B6) + (0.042*B7)',{  #// (Ke, Im  et al 2016)
         'B1' : image.select(['UB']),
@@ -75,7 +75,7 @@ def f_albedoL8(image):
     return image.addBands(alfa);
 
 if __name__ == "__main__":
-    f_albedoL8()
+    f_albedoL8_9()
     f_albedoL5L7()
     # f_cloudMaskL8_SR()
     # f_cloudMaskL457_SR()

@@ -21,15 +21,15 @@ import ee
 from datetime import date
 
 #FOLDERS
-from .landsatcollection import fexp_landsat_5PathRow,fexp_landsat_7PathRow, fexp_landsat_8PathRow
-from .masks import (f_albedoL5L7,f_albedoL8)
+from .landsatcollection import fexp_landsat_5PathRow,fexp_landsat_7PathRow, fexp_landsat_8PathRow, fexp_landsat_9PathRow
+from .masks import (f_albedoL5L7,f_albedoL8_9)
 from .meteorology import get_meteorology
 from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat,fexp_sensible_heat_flux)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
 from .constants import Constants
-from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8
+from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
 
 #COLLECTION FUNCTION
 class Collection():
@@ -66,13 +66,15 @@ class Collection():
         self.collection_l5=fexp_landsat_5PathRow(self.start_date, self.end_date, self.path, self.row, self.cloud_cover)
         self.collection_l7=fexp_landsat_7PathRow(self.start_date, self.end_date, self.path, self.row, self.cloud_cover)
         self.collection_l8=fexp_landsat_8PathRow(self.start_date, self.end_date, self.path, self.row, self.cloud_cover)
+        self.collection_l9=fexp_landsat_9PathRow(self.start_date, self.end_date, self.path, self.row, self.cloud_cover)
 
         #LIST OF IMAGES
         self.sceneListL5 = self.collection_l5.aggregate_array('system:index').getInfo()
         self.sceneListL7 = self.collection_l7.aggregate_array('system:index').getInfo()
         self.sceneListL8 = self.collection_l8.aggregate_array('system:index').getInfo()
+        self.sceneListL9 = self.collection_l9.aggregate_array('system:index').getInfo()
 
-        self.collection = self.collection_l5.merge(self.collection_l7).merge(self.collection_l8)
+        self.collection = self.collection_l5.merge(self.collection_l7).merge(self.collection_l8).merge(self.collection_l9)
         self.CollectionList=self.collection.sort("system:time_start").aggregate_array('system:index').getInfo()
         self.CollectionList_image = self.collection.aggregate_array('system:index').getInfo()
         self.count = self.collection.size().getInfo()
@@ -146,7 +148,7 @@ class Collection():
                  #ALBEDO TASUMI ET AL. (2008)
                  self.image=self.image.map(f_albedoL5L7)
 
-            else:
+            elif self.landsat_version == 'LANDSAT_8':
                 self.image_toa=ee.Image(Constants.LANDSAT_COLLECTION_8+ "/"+self._index.getInfo())
 
                 #GET CALIBRATED RADIANCE
@@ -157,7 +159,20 @@ class Collection():
                 self.image=ee.ImageCollection(self.image).map(prepSrLandsat8)
 
                 #ALBEDO TASUMI ET AL. (2008) METHOD WITH KE ET AL. (2016) COEFFICIENTS
-                self.image=self.image.map(f_albedoL8)
+                self.image=self.image.map(f_albedoL8_9)
+
+            else:
+                self.image_toa=ee.Image(Constants.LANDSAT_COLLECTION_9+ "/"+self._index.getInfo())
+
+                #GET CALIBRATED RADIANCE
+                self.col_rad = ee.Algorithms.Landsat.calibratedRadiance(self.image_toa)
+                self.col_rad = self.image.addBands(self.col_rad.select([9],["T_RAD"]))
+
+                #CLOUD REMOTION
+                self.image=ee.ImageCollection(self.image).map(prepSrLandsat8and9)
+
+                #ALBEDO TASUMI ET AL. (2008) METHOD WITH KE ET AL. (2016) COEFFICIENTS
+                self.image=self.image.map(f_albedoL8_9)
 
             #GEOMETRY
             self.geometryReducer=self.image.geometry().bounds().getInfo()

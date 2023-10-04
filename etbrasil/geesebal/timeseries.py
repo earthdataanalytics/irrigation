@@ -30,15 +30,15 @@ import datetime
 import sys
 
 #FOLDERS
-from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate
-from .masks import (f_albedoL5L7,f_albedoL8)
+from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate, fexp_landsat_9Coordinate
+from .masks import (f_albedoL5L7,f_albedoL8_9)
 from .meteorology import get_meteorology, retrievePrecip, verifyMeteoAvail
 from .tools import (fexp_spec_ind, fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat,fexp_sensible_heat_flux_ver_server)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
 from .constants import Constants
-from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8
+from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
 
 
     
@@ -80,6 +80,7 @@ class TimeSeries():
         self.collection_l5=fexp_landsat_5Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
         self.collection_l7=fexp_landsat_7Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
         self.collection_l8=fexp_landsat_8Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
+        self.collection_l9=fexp_landsat_9Coordinate(self.start_date, self.end_date, self.coordinate, self.cloud_cover)
 
         #FOR EACH IMAGE IN THE COLLECTION
         #ESTIMATE ET DAILY IMAGE AND EXTRACT
@@ -339,7 +340,7 @@ class TimeSeries():
         
     
         fc5 = (self.collection_l5.
-                    map(f_albedoL8)
+                    map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
                     .map(lambda image: get_meteorology(image, scale=scale))
@@ -357,10 +358,19 @@ class TimeSeries():
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
         
         fc8 = (self.collection_l8
-                    .map(f_albedoL8)
+                    .map(f_albedoL8_9)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
                     .map(lambda image: get_meteorology(image, scale=scale))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
+
+        fc9 = (self.collection_l9
+                    .map(f_albedoL8_9)
+                    .map(verifyMeteoAvail)
+                    .filter(ee.Filter.gt('meteo_count', 0))
+                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: retrieveETandMeteo(image, debug=debug))
+        )
+        self.ETandMeteo = self.ETandMeteo.merge(fc9)
