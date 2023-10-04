@@ -1,9 +1,9 @@
 import ee
-def prepSrLandsat8(image):
+def prepSrLandsat8and9(image):
     """A function that scales and masks Landsat (C2) surface reflectance images.
 
     Args:
-      image: An Earth Engine Landsat 8 surface reflectance image.
+      image: An Earth Engine Landsat 8 and 9 surface reflectance image.
 
     Returns:
       An Earth Engine Landsat surface reflectance image with scaled and masked bands.
