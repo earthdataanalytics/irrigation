@@ -24,7 +24,9 @@ from datetime import date
 from .landsatcollection import fexp_landsat_5PathRow,fexp_landsat_7PathRow, fexp_landsat_8PathRow, fexp_landsat_9PathRow
 from .masks import (f_albedoL5L7,f_albedoL8_9)
 from .meteorology import get_meteorology
-from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
+from .tools import (fexp_spec_ind, 
+                    # fexp_lst_export,
+                    fexp_radlong_up, LST_DEM_correction,
 fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat,fexp_sensible_heat_flux)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
@@ -139,7 +141,7 @@ class Collection():
                  self.image_toa=ee.Image(Constants.LANDSAT_COLLECTION_7+ "/"+ self.CollectionList[n][4:])
 
                  #GET CALIBRATED RADIANCE
-                 self.col_rad = ee.Algorithms.Landsat.calibratedRadiance(self.image_toa);
+                 self.col_rad = ee.Algorithms.Landsat.calibratedRadiance(self.image_toa)
                  self.col_rad = self.image.addBands(self.col_rad.select([5],["T_RAD"]))
 
                  #CLOUD REMOTION
@@ -156,7 +158,7 @@ class Collection():
                 self.col_rad = self.image.addBands(self.col_rad.select([9],["T_RAD"]))
 
                 #CLOUD REMOTION
-                self.image=ee.ImageCollection(self.image).map(prepSrLandsat8)
+                self.image=ee.ImageCollection(self.image).map(prepSrLandsat8and9)
 
                 #ALBEDO TASUMI ET AL. (2008) METHOD WITH KE ET AL. (2016) COEFFICIENTS
                 self.image=self.image.map(f_albedoL8_9)

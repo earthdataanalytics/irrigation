@@ -299,6 +299,8 @@ class TimeSeries():
                 # - CONNECTION ISSUES.
                 # - SEBAL DOESN'T FIND A REASONABLE LINEAR RELATIONSHIP (dT).
                 raise Exception(sys.exc_info()[0])
+            
+            if(debug):
                 etFeature = ee.Feature(self.coordinate.centroid(), {
                     'date': date_string,
                     'version': landsat_version,
@@ -315,9 +317,6 @@ class TimeSeries():
                     'slope': None,
                     'precip': None
                 })
-
-            
-            if(debug):
                 image_bands_max = image.reduceRegion(
                 reducer=ee.Reducer.max(),
                 geometry=self.coordinate,

@@ -17,18 +17,18 @@
 
 #PYTHON PACKAGES
 #Call EE
-import ee
+# import ee
 
 #CLOUD REMOVAL
 
 #FUNCTION TO MASK CLOUDS IN LANDSAT 5 AND 7 FOR SURFACE REFLECTANCE
 
 def f_cloudMaskL457_SR(image):
-    quality = image.select('pixel_qa');
-    c01 = quality.eq(66);#CLEAR, LOW CONFIDENCE CLOUD
-    c02 = quality.eq(68);#WATER, LOW CONFIDENCE CLOUD
-    mask = c01.Or(c02);
-    return image.updateMask(mask);
+    quality = image.select('pixel_qa')
+    c01 = quality.eq(66)#CLEAR, LOW CONFIDENCE CLOUD
+    c02 = quality.eq(68)#WATER, LOW CONFIDENCE CLOUD
+    mask = c01.Or(c02)
+    return image.updateMask(mask)
 
 #FUNCTION FO MASK CLOUD IN LANDSAT 8 FOR SURFACE REFELCTANCE
 # def f_cloudMaskL8_SR(image):
@@ -51,10 +51,10 @@ def f_albedoL5L7(image):
         'B4' : image.select(['NIR']),
         'B5' : image.select(['SWIR_1']),
         'B7' : image.select(['SWIR_2'])
-      }).rename('ALFA');
+      }).rename('ALFA')
 
     #ADD BANDS
-    return image.addBands(alfa);
+    return image.addBands(alfa)
 
 #ALBEDO
 #USING TASUMI ET AL. (2008) METHOD FOR LANDSAT 8 and 9
@@ -69,10 +69,10 @@ def f_albedoL8_9(image):
         'B5' : image.select(['NIR']),
         'B6' : image.select(['SWIR_1']),
         'B7' : image.select(['SWIR_2'])
-      }).rename('ALFA');
+      }).rename('ALFA')
 
     #ADD BANDS
-    return image.addBands(alfa);
+    return image.addBands(alfa)
 
 if __name__ == "__main__":
     f_albedoL8_9()

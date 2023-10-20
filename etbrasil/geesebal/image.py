@@ -29,13 +29,19 @@ import ee
 from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate, fexp_landsat_9Coordinate
 from .masks import (f_albedoL5L7,f_albedoL8_9)
 from .meteorology import get_meteorology, retrievePrecipImage, verifyMeteoAvail
-from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
-fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat, fexp_sensible_heat_flux,
+from .tools import (fexp_spec_ind, 
+                    # fexp_lst_export,
+                    fexp_radlong_up, LST_DEM_correction,
+fexp_radshort_down, 
+fexp_radlong_down, 
+fexp_radbalance,
+fexp_soil_heat, 
+# fexp_sensible_heat_flux,
 fexp_sensible_heat_flux_ver_server)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
 from .constants import Constants
-from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
+# from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
 #IMAGE FUNCTION
 class Image():
 
@@ -69,7 +75,7 @@ class Image():
         def retrieveETandMeteo(image):
             #GET INFORMATIONS FROM IMAGE
             image = ee.Image(image)
-            zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
+            # zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
             sun_elevation = image.get("SUN_ELEVATION")
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
@@ -101,7 +107,7 @@ class Image():
             #SRTM DATA ELEVATION
             srtm = ee.Image(Constants.SRTM_ELEVATION_COLLECTION).clip(geometryReducer)
             z_alt = srtm.select('elevation')
-            slope = ee.Terrain.slope(z_alt)
+            # slope = ee.Terrain.slope(z_alt)
 
             #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
             image=fexp_spec_ind(image, scale=scale)
@@ -168,7 +174,7 @@ class Image():
                 image
                     .reduceRegion(
                         reducer=ee.Reducer.mean(),
-                        geometry=self.coordinate,
+                        geometry=self.coordinate, # TODO: Where is self.coordinate declared?
                         scale=scale,
                         maxPixels=1e14)
                     .select(cols)
