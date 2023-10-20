@@ -2,10 +2,14 @@ import unittest
 import sys
 import os
 import ee
+
 # add the path to the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../geesebal')))
 from geesebal import TimeSeries
+from utils.time_controller import TimeController
+
+time_controller = TimeController()
 
 
 # sebalTS = TimeSeries(start_yr+yr_inc, start_mo, start_dy,
@@ -23,10 +27,10 @@ from geesebal import TimeSeries
 class TestTimeSeries(unittest.TestCase):
     ## class to run code on the top
     def setUp(self):
-        self.year_i = 2018
+        self.year_i = 2019
         self.month_i = 1
         self.day_i = 1
-        self.year_e = 2018
+        self.year_e = 2019
         self.month_e = 4
         self.day_e = 1
         self.cloud_cover = 20
@@ -45,9 +49,10 @@ class TestTimeSeries(unittest.TestCase):
         
         self.coordinates = ee.Geometry.Point([-121.79909699471962, 38.53358811531448])
        
-    
+    @time_controller.timeit
     def test_TimeSeries(self):
         self.setUp()
+        debug = True
         idx = 0
         aoi = ee.FeatureCollection(self.geometry)
         max_points = 10000 # set arbitrarily high to capture all values
@@ -70,51 +75,52 @@ class TestTimeSeries(unittest.TestCase):
             Ts_cold=self.Ts_cold,
             NDVI_hot=self.NDVI_hot,
             Ts_hot=self.Ts_hot,
-            calcRegionalET=self.calcRegionalET
+            calcRegionalET=self.calcRegionalET,
+            debug=debug
                                         )
-        
-        etFeature = sebalTS.ETandMeteo.map(lambda x: x.set('loc_type', loc_type))
-        
-        # print(sebalTS.getInfo())
-        # # print max LST_NW value
-        # print("Firts = ")
-        
-        etFeatureInfo = etFeature.getInfo()["features"]
-        et_values = []
-        for feature in etFeatureInfo:
-       
-       
-            image = feature["properties"]["image"]["properties"]
-            image_id = image["id"]
-            date = image["date"]
-            version = image["version"]
-            image_bands_max = image["image_bands_max"]
-            properties = feature["properties"]['msg']["properties"]
-            print("")
-            print("============ BANDS CHECK ==================")
-            print(f"Image ID = {image_id}")
-            print(f"Date = {date}")
-            print(image_bands_max)
-            print("============ BANDS CHECK ==================")
-            print("")
-            print("")
-            print("============= SUMMARY ====================")
-            print(f"Image ID = {image_id}")
-            print(f"status = {properties['status']}")
-            print(f"Date = {properties['date']}")
-            print(f"ET_24H = {properties['ET_24h']}")
-            print(f"AirT_G = {properties['AirT_G']}")
-            print(f"NDVI = {properties['NDVI']}")
-            print("============= SUMMARY ====================")
+        if(debug):
+            etFeature = sebalTS.ETandMeteo.map(lambda x: x.set('loc_type', loc_type))
             
-            et_values.append([properties['date'],properties['ET_24h']])
+            # print(sebalTS.getInfo())
+            # # print max LST_NW value
+            # print("Firts = ")
             
-            
-        # order et_values by date
-        et_values.sort(key=lambda x: x[0])
+            etFeatureInfo = etFeature.getInfo()["features"]
+            et_values = []
+            for feature in etFeatureInfo:
+        
+        
+                image = feature["properties"]["image"]["properties"]
+                image_id = image["id"]
+                date = image["date"]
+                version = image["version"]
+                image_bands_max = image["image_bands_max"]
+                properties = feature["properties"]['msg']["properties"]
+                print("")
+                print("============ BANDS CHECK ==================")
+                print(f"Image ID = {image_id}")
+                print(f"Date = {date}")
+                print(image_bands_max)
+                print("============ BANDS CHECK ==================")
+                print("")
+                print("")
+                print("============= SUMMARY ====================")
+                print(f"Image ID = {image_id}")
+                print(f"status = {properties['status']}")
+                print(f"Date = {properties['date']}")
+                print(f"ET_24H = {properties['ET_24h']}")
+                print(f"AirT_G = {properties['AirT_G']}")
+                print(f"NDVI = {properties['NDVI']}")
+                print("============= SUMMARY ====================")
+                
+                et_values.append([properties['date'],properties['ET_24h']])
+                
+                
+            # order et_values by date
+            et_values.sort(key=lambda x: x[0])
 
-        # Print the ET values
-        print("ET Values = ")
-        print(et_values)
+            # Print the ET values
+            print("ET Values = ")
+            print(et_values)
 if __name__ == '__main__':
     unittest.main()
