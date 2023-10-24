@@ -147,8 +147,8 @@ def fexp_lst_export(img_main, img_main_RAD, landsat_version, refpoly):
     d_wv_med = wv.reduceRegion(
         reducer=ee.Reducer.mean(),
         geometry=refpoly,
-        scale=25000,
-        maxPixels=9000000000000,
+        scale=Constants.REDUCER_WP_SCALE,
+        maxPixels=Constants.REDUCER_MAX_PIXELS,
     )
     n_wv_med = ee.Number(d_wv_med.get("SRWVAP12"))
     wv = wv.unmask(-9999)
@@ -662,7 +662,7 @@ def fexp_sensible_heat_flux(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
             scale=scale,
-            maxPixels=9000000000,
+            maxPixels=Constants.REDUCER_MAX_PIXELS,
         )
 
         n_rah_hot = ee.Number(d_rah_hot.get("rah"))
@@ -710,7 +710,7 @@ def fexp_sensible_heat_flux(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
             scale=scale,
-            maxPixels=9000000000,
+            maxPixels=Constants.REDUCER_MAX_PIXELS,
         )
         n_H_int = ee.Number(d_H_int.get("H"))
 

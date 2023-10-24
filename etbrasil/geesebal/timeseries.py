@@ -63,7 +63,7 @@ class TimeSeries():
                  Ts_hot=20,
                  calcRegionalET=False,
                  debug=False,
-                 scale=30
+                 scale=Constants.REDUCER_SCALE
         ):
 
         #output variable
@@ -205,21 +205,21 @@ class TimeSeries():
                         reducer=ee.Reducer.first(),
                         geometry=self.coordinate,
                         scale=scale,
-                        maxPixels=1e14)
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMinValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.min(),
                         geometry=self.coordinate,
                         scale=scale,
-                        maxPixels=1e14)
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMaxValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.max(),
                         geometry=self.coordinate,
                         scale=scale,
-                        maxPixels=1e14)
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
                 
                 ET_daily=image.select(['ET_24h'],[NAME_FINAL])
                 ET_point = extractValue(ET_daily)
@@ -273,7 +273,7 @@ class TimeSeries():
                 z_alt_point_get = ee.Number(z_alt_point.get(NAME_FINAL))
                 slope_point_get = ee.Number(slope_point.get(NAME_FINAL))
 
-                precip = retrievePrecip(date_string, self.coordinate, scale=scale)
+                precip = retrievePrecip(date_string, self.coordinate, scale=None)
 
                 etFeature = ee.Feature(self.coordinate.centroid(), {
                     'date': date_string,
@@ -322,7 +322,7 @@ class TimeSeries():
                 reducer=ee.Reducer.max(),
                 geometry=self.coordinate,
                 scale=scale,
-                maxPixels=9e14
+                maxPixels=Constants.REDUCER_MAX_PIXELS
                 )
                 
                 image_band_features = ee.Feature(None, {
@@ -336,14 +336,69 @@ class TimeSeries():
                 return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
             
             return etFeature
-           
         
-    
-        fc5 = (self.collection_l5.
-                    map(f_albedoL5L7)
+        if(debug):
+            def print_image_id(image):
+                image=ee.Image(image)
+                return image.get('system:index')
+            
+            try:
+                collention_l5 = (self.collection_l5.map(f_albedoL5L7)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                
+                
+                number_of_l5_images = collention_l5.size().getInfo()
+                
+                print("Number of L5 images = ", number_of_l5_images)
+            except:
+                number_of_l5_images = 0
+                print("No L5 images")
+            try:
+                collection_l7 = (self.collection_l7.map(f_albedoL5L7)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                
+                number_of_l7_images = collection_l7.size().getInfo()
+            
+            
+        
+                print("Number of L7 images = ", number_of_l7_images)
+            except:
+                number_of_l7_images = 0
+                print("No L7 images")
+                
+            try:
+            
+                collection_l8 = (self.collection_l8.map(f_albedoL8_9)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                number_of_l8_images = collection_l8.size().getInfo()
+                
+                print("Number of L8 images = ", number_of_l8_images)
+            except:
+                number_of_l8_images = 0
+                print("No L8 images")
+                
+            try:
+                collection_l9 = (self.collection_l9.map(f_albedoL8_9)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                
+                number_of_l9_images = collection_l9.size().getInfo()
+                
+                print("Number of L9 images = ", number_of_l9_images)
+            
+            except:
+                number_of_l9_images = 0
+                print("No L9 images")
+                
+        fc5 = (self.collection_l5
+                    .map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
-                    .filter(ee.Filter.gt('meteo_count', 0))
+                    .filter(ee.Filter.gt('meteo_count', 0)) 
                     .map(lambda image: get_meteorology(image, scale=scale))
+                    # .aside(print)
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = fc5

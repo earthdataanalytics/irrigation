@@ -176,7 +176,7 @@ class Image():
                         reducer=ee.Reducer.mean(),
                         geometry=self.coordinate, # TODO: Where is self.coordinate declared?
                         scale=scale,
-                        maxPixels=1e14)
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
                     .select(cols)
             )
 

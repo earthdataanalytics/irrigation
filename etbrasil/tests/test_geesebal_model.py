@@ -27,11 +27,11 @@ time_controller = TimeController()
 class TestTimeSeries(unittest.TestCase):
     ## class to run code on the top
     def setUp(self):
-        self.year_i = 2019
-        self.month_i = 1
+        self.year_i = 2023
+        self.month_i = 5
         self.day_i = 1
-        self.year_e = 2019
-        self.month_e = 4
+        self.year_e = 2023
+        self.month_e = 6
         self.day_e = 1
         self.cloud_cover = 20
         self.buffersize = 90
@@ -122,5 +122,26 @@ class TestTimeSeries(unittest.TestCase):
             # Print the ET values
             print("ET Values = ")
             print(et_values)
+            
+            # NOTE: Current values for the test are:
+            # --- from 2019-01-01 to 2019-04-01 ---
+            # 2019-01-27: 1.53 (Time: scale 30: 2 minutes 120 seconds, scale 40: 45 seconds)
+            # 2019-03-06: 0.89 (CONSIDER: There is an empty square near the plot that we are studying in the test
+            # so when we increase the resolution of the reducer, we get a different value)
+            # --------------------------------------
+            # --- from 2023-05-01 to 2023-06-01 --- 5.445317766717414 5.804835841711025 5.92412042834145 4.888227670106112
+            # 2023-05-11: (30 - 6.520  100 - 6.28)
+            # 2023-05-14: (30 - 5.21 100 - 5.44)
+            # 2023-05-16: (30 - 5.52 100 - 5.80)
+            # 2023-05-22: (30 - 5.71 100 - 5.92)
+            # 2023-05-30: (30 - 4.44 100 - 4.88)
+            # 30 --> 2 min 134 secs
+            # 20000 --> 1 min 102 secs 
+            # --------------------------------------
+            
+            print("Actual ET Values = ")
+            print("2019-01-27: 1.53")
+            print("2019-03-06: 0.89")
+            print("2023-05-11: 6.520")
 if __name__ == '__main__':
     unittest.main()
