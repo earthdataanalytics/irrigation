@@ -42,7 +42,7 @@ class TestSsebop(unittest.TestCase):
 
         self.image_size = 768
         self.landsat_cs = 30
-        self.start_date = "2023-04-01"
+        self.start_date = "2023-05-01"
         self.end_date = "2023-06-01"
 
         self.collections = [
@@ -52,11 +52,14 @@ class TestSsebop(unittest.TestCase):
             "LANDSAT/LT05/C02/T1_L2",
         ]
 
+        # self.et_reference_source = "projects/openet/reference_et/cimis/daily"
+        # self.et_reference_band = "etr_asce"
         self.et_reference_source = "projects/openet/reference_et/cimis/daily"
         self.et_reference_band = "etr_asce"
         self.et_reference_factor = 1.0
         self.et_reference_resample = "nearest"
         self.et_reference_date_type = "daily"
+        # self.own_et_model="ECMWF/ERA5_LAND/HOURLY"
 
         # Only keep images with an average cloud cover less than
         # Cloud cover filter parameter is not being passed in (yet)
@@ -68,20 +71,34 @@ class TestSsebop(unittest.TestCase):
         # Interpolation method - currently only LINEAR is supported
         self.interp_method = "LINEAR"
 
-        self.test_point = ee.Geometry.Point([-121.79909699471962, 38.53358811531448])
+        self.test_point = ee.Geometry.Point([-121.80027912713243, 38.53764735054985])
 
         self.study_area = ee.Geometry.Polygon(
             [
                 [
-                    [-121.91601164381566, 38.61696084232722],
-                    [-121.91601164381566, 38.42705725482288],
-                    [-121.62624723951879, 38.42705725482288],
-                    [-121.62624723951879, 38.61696084232722],
+                    [-121.84027912713243, 38.5592113359509],
+          [-121.84027912713243, 38.50764735054985],
+          [-121.75376179314806, 38.50764735054985],
+          [-121.75376179314806, 38.5592113359509],
                 ]
             ],
             None,
             False,
         )
+        # self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
+
+        # self.study_area = ee.Geometry.Polygon(
+        #     [
+        #         [
+        #             [-4.59673559330618, 37.87785028383721],
+        #             [-4.59673559330618, 37.86490927780263],
+        #             [-4.579054471480008, 37.86490927780263],
+        #             [-4.579054471480008, 37.87785028383721],
+        #         ]
+        #     ],
+        #     None,
+        #     False,
+        # )
 
         self.study_region = self.study_area.bounds(1, "EPSG:4326")
         self.study_crs = "EPSG:32610"
@@ -101,6 +118,7 @@ class TestSsebop(unittest.TestCase):
             end_date=self.end_date,
             geometry=self.test_point,
             cloud_cover_max=20,
+            # own_et_model=self.own_et_model,
             # filter_args={},
         )
 
