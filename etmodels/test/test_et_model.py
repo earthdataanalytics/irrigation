@@ -14,7 +14,7 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "../ssebop/refetgee"))
 )
 
-from daily import Daily, NASA_ET0, GFS_ET0
+from daily import Calculate_ET0
 from etmodels.test.time_controller import TimeController
 from collection import Collection
 from IPython.display import Image
@@ -47,7 +47,7 @@ class TestSsebop(unittest.TestCase):
 
         self.image_size = 768
         self.landsat_cs = 30
-        self.start_date = "2023-10-01"
+        self.start_date = "2023-09-01"
         self.end_date = "2023-10-10"
 
         # self.et_reference_source = "projects/openet/reference_et/cimis/daily"
@@ -129,12 +129,13 @@ class TestSsebop(unittest.TestCase):
 
         with ee.profilePrinting():
 
-            gfs_et0 = NASA_ET0(
+            gfs_et0 = Calculate_ET0(
                 study_region=self.study_region,
                 start_date=self.start_date,
                 end_date=self.end_date,
                 scale=10,
                 debug=False,
+                model="NASA"
             )
             et0_collection = gfs_et0.calculate_eto_daily()
             

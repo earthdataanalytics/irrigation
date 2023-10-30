@@ -1311,6 +1311,7 @@ class GFS_ET0:
                 .sqrt()
                 .rename(["wind"])
             )
+
         # create variable list in ee to store et
         daily_list_et = ee.List.repeat(0, difference_in_days)
 
@@ -1341,10 +1342,12 @@ class GFS_ET0:
                 .mean()
             )
 
-            solar_radiation = collection_day.select(
-                ["downward_shortwave_radiation_flux"]
-            ).mean().multiply(0.0864)
-            
+            solar_radiation = (
+                collection_day.select(["downward_shortwave_radiation_flux"])
+                .mean()
+                .multiply(0.0864)
+            )
+
             et_daily = Daily(
                 tmax=tmax,
                 tmin=tmin,
@@ -1358,33 +1361,26 @@ class GFS_ET0:
                 method=self.method,
                 rso_type=self.rso_type,
             )
-            
+
             self.eto = et_daily.eto
             self.etr = et_daily.etr
-            
-          
+
             # add today date to the image
             daily_et = self.eto.set("system:time_start", day_gee.millis())
-            
-            
-           # add daily_et to et_collection
+
+            # add daily_et to et_collection
             et_collection = et_collection.merge(daily_et)
-            
-            
-            
+
         return et_collection
-            
 
 
-
-
-class NASA_ET0:
+class Calculate_ET0:
     """
     NASA Global Land Data Assimilation System Version 2 (GLDAS-2) has three components: GLDAS-2.0, GLDAS-2.1, and GLDAS-2.2. GLDAS-2.0 is forced entirely with the Princeton meteorological forcing input data and provides a temporally consistent series from 1948 through 2014. GLDAS-2.1 is forced with a combination of model and observation data from 2000 to present. GLDAS-2.2 product suites use data assimilation (DA), whereas the GLDAS-2.0 and GLDAS-2.1 products are "open-loop" (i.e., no data assimilation). The choice of forcing data, as well as DA observation source, variable, and scheme, vary for different GLDAS-2.2 products.GLDAS-2.1 is one of two components of the GLDAS Version 2 (GLDAS-2) dataset, the second being GLDAS-2.0. GLDAS-2.1 is analogous to GLDAS-1 product stream, with upgraded models forced by a combination of GDAS, disaggregated GPCP, and AGRMET radiation data sets.
 
     The GLDAS-2.1 simulation started on January 1, 2000 using the conditions from the GLDAS-2.0 simulation. This simulation was forced with National Oceanic and Atmospheric Administration (NOAA)/Global Data Assimilation System (GDAS) atmospheric analysis fields (Derber et al., 1991), the disaggregated Global Precipitation Climatology Project (GPCP) precipitation fields (Adler et al., 2003), and the Air Force Weather Agency's AGRicultural METeorological modeling system (AGRMET) radiation fields which became available for March 1, 2001 onwards.
-    
-    
+
+
     """
 
     def __init__(
@@ -1397,18 +1393,25 @@ class NASA_ET0:
         scale=10,
         debug=False,
         landsat_cs=30,
+        model="NASA" # NASA, GFS
     ):
         self.study_region = study_region
-        self.start_date = start_date
-        self.end_date = end_date
+        self.start_date = ee.Date(start_date)
+        self.end_date = ee.Date(end_date)
         self.method = method
         self.scale = scale
         self.debug = debug
         self.rso_type = rso_type
         self.landsat_cs = landsat_cs
+        self.model = model
 
         # Initialize the GFS dataset
-        self.collection_name = "NASA/GLDAS/V021/NOAH/G025/T3H"
+        if model == "NASA":
+            self.collection_name = "NASA/GLDAS/V021/NOAH/G025/T3H"
+        elif model == "GFS":
+            self.collection_name = "NOAA/GFS0P25"
+        else:
+            raise ValueError("Unsupported model input, please use NASA or GFS")
         self.input_collection = (
             ee.ImageCollection(self.collection_name)
             .filterBounds(self.study_region)
@@ -1420,22 +1423,7 @@ class NASA_ET0:
         zw=None,
         elev=None,
         lat=None,
-        method="asce",
     ):
-        date_first_image = (
-            ee.Image(self.input_collection.first()).get("system:time_start")
-        )
-        date_last_image = (
-            ee.Image(self.input_collection.sort("system:time_start", False).first())
-            .get("system:time_start")
-        )
-        # milisecods to datetime
-        date_first_image = datetime.datetime.fromtimestamp(date_first_image / 1000)
-        date_last_image = datetime.datetime.fromtimestamp(date_last_image / 1000)
-
-        # differences in days
-        difference_in_days = (date_last_image - date_first_image).days + 1
-
         ## COSTANT VALUES
         if zw is None:
             zw = ee.Number(2)
@@ -1461,25 +1449,21 @@ class NASA_ET0:
                 .sqrt()
                 .rename(["wind"])
             )
-        et_collection = ee.ImageCollection([])
-
-        for day_index in range(0, difference_in_days):
-            day = date_first_image + datetime.timedelta(days=day_index)
-            doy = ee.Number(ee.Date(day).getRelative("day", "year")).add(1).double()
-            day_gee = ee.Date(day)
-
-            collection_day = self.input_collection.filterDate(
-                day_gee, day_gee.advance(1, "day")
-            )
-
-            tmax = collection_day.select(["Tair_f_inst"]).max().subtract(273.15)
-            tmin = collection_day.select(["Tair_f_inst"]).min().subtract(273.15)
+            
+        def etDayNasa(dayOffset):
+            start = self.start_date.advance(dayOffset, "days")
+            end = start.advance(1, "days")
+            
+            tmax = self.input_collection.select(["Tair_f_inst"]).filterDate(start, end).max().subtract(273.15)
+            tmin = self.input_collection.select(["Tair_f_inst"]).filterDate(start, end).min().subtract(273.15)
+            mean_values = self.input_collection.select(["Qair_f_inst", "Swnet_tavg", "Wind_f_inst"]).filterDate(start, end).mean()
             actual_vapor_pressure = calcs._actual_vapor_pressure(
                 pair=calcs._air_pressure(elev, self.method),
-                q=collection_day.select(["Qair_f_inst"]).mean(),
+                q=mean_values.select(["Qair_f_inst"]),
             )
-            solar_radiation = collection_day.select(["Swnet_tavg"]).mean().multiply(0.0864)
-            wind_speed = collection_day.select(["Wind_f_inst"]).mean()
+            solar_radiation = mean_values.select(["Swnet_tavg"]).multiply(0.0864)
+            wind_speed = mean_values.select(["Wind_f_inst"])
+            doy = ee.Number(start.getRelative("day", "year")).add(1).double()
             et_daily = Daily(
                 tmax=tmax,
                 tmin=tmin,
@@ -1494,20 +1478,101 @@ class NASA_ET0:
                 rso_type=self.rso_type,
             )
             
-            self.eto = et_daily.eto
-            self.etr = et_daily.etr
+            et_daily_image = et_daily.eto
+            # add etr
+            et_daily_image = et_daily_image.addBands(et_daily.etr)
+            # add date
+            et_daily_image = et_daily_image.set("system:time_start", start.millis())
             
-          
-            # add today date to the image
-            daily_et = self.eto.set("system:time_start", day_gee.millis())
-            
-            
-           # add daily_et to et_collection
-            et_collection = et_collection.merge(daily_et)
+            return et_daily_image
         
+        def etDayGFS(dayOffset):
+            start = self.start_date.advance(dayOffset, "days")
+            end = start.advance(1, "days")
             
-        return et_collection
+            tmax = self.input_collection.select(["temperature_2m_above_ground"]).filterDate(start, end).max().subtract(273.15)
+            tmin = self.input_collection.select(["temperature_2m_above_ground"]).filterDate(start, end).min().subtract(273.15)
+            mean_values = self.input_collection.select(["specific_humidity_2m_above_ground", "v_component_of_wind_10m_above_ground", "u_component_of_wind_10m_above_ground", "downward_shortwave_radiation_flux"]).filterDate(start, end).mean()
+            actual_vapor_pressure = calcs._actual_vapor_pressure(
+                pair=calcs._air_pressure(elev, self.method),
+                q=mean_values.select(["specific_humidity_2m_above_ground"]),
+            )
+            solar_radiation = mean_values.select(["downward_shortwave_radiation_flux", "v_component_of_wind_10m_above_ground"]).multiply(0.0864)
+            wind_speed = (
+                mean_values.select(
+                    [
+                        "u_component_of_wind_10m_above_ground",
+                        "v_component_of_wind_10m_above_ground",
+                    ]
+                )
+                .map(lambda img: wind_magnitude(img))
+                .mean()
+            )
+            doy = ee.Number(start.getRelative("day", "year")).add(1).double()
+            et_daily = Daily(
+                tmax=tmax,
+                tmin=tmin,
+                ea=actual_vapor_pressure,
+                rs=solar_radiation,
+                uz=wind_speed,
+                zw=zw,
+                elev=elev,
+                lat=lat,
+                doy=doy,
+                method=self.method,
+                rso_type=self.rso_type,
+            )
             
+            et_daily_image = et_daily.eto
+            # add etr
+            et_daily_image = et_daily_image.addBands(et_daily.etr)
+            # add date
+            et_daily_image = et_daily_image.set("system:time_start", start.millis())
+            
+            return et_daily_image
+
+        numberOfDays = self.end_date.difference(self.start_date, "days")
+        
+        if(self.model == "NASA"):
+            daily = ee.ImageCollection(
+                ee.List.sequence(0, numberOfDays.subtract(1)).map(etDayNasa)
+            )
+        elif(self.model == "GFS"):
+            daily = ee.ImageCollection(
+                ee.List.sequence(0, numberOfDays.subtract(1)).map(etDayGFS)
+            )
+        else:
+            raise ValueError("Unsupported model input, please use NASA or GFS")
+       
+        # def calculate_et(image):
+        #     tmax = image.select(["Tair_f_inst"]).max().subtract(273.15)
+        #     tmin = image.select(["Tair_f_inst"]).min().subtract(273.15)
+        #     actual_vapor_pressure = calcs._actual_vapor_pressure(
+        #         pair=calcs._air_pressure(elev, self.method),
+        #         q=image.select(["Qair_f_inst"]).mean(),
+        #     )
+        #     solar_radiation = image.select(["Swnet_tavg"]).mean().multiply(0.0864)
+        #     wind_speed = image.select(["Wind_f_inst"]).mean()
+        #     et_daily = Daily(
+        #         tmax=tmax,
+        #         tmin=tmin,
+        #         ea=actual_vapor_pressure,
+        #         rs=solar_radiation,
+        #         uz=wind_speed,
+        #         zw=zw,
+        #         elev=elev,
+        #         lat=lat,
+        #         doy=doy,
+        #         method=self.method,
+        #         rso_type=self.rso_type,
+        #     )
+        #     # set et0 and etr image
+        #     image = image.set("et0", et_daily.eto)
+        #     image = image.set("etr", et_daily.etr)
+            
+        #     return image
+
+        return daily
 
 
 # class NASA_ET0:
