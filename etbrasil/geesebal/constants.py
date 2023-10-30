@@ -6,6 +6,9 @@ class Constants:
     LANDSAT_COLLECTION_7 = "LANDSAT/LE07/C02/T1_L2"
     LANDSAT_COLLECTION_5 = "LANDSAT/LT05/C02/T1_L2"
     
+    LANDSAT_ADDITIONAL_BANDS = [
+        "QA_PIXEL", "QA_RADSAT"
+    ]
     LANDSAT_9_BANDS = {
         "OFFICIAL": ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7", "ST_B10"],
         "CUSTOM": ["UB", "B", "GR", "R", "NIR", "SWIR_1", "SWIR_2", "T_LST"],
