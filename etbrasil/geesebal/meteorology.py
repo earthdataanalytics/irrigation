@@ -203,7 +203,7 @@ def retrievePrecip(metadate, location, window_days=10, scale=None):
     collection = ee.ImageCollection(Constants.NOAA_CFSV2_6H)
     
     # print("Target scale = ", ee.Image(collection.first()).select('Precipitation_rate_surface_6_Hour_Average').projection().nominalScale().getInfo())
-    print("Image id = ", ee.Image(collection.first()).select('Precipitation_rate_surface_6_Hour_Average').getInfo()['id'])
+    # print("Image id = ", ee.Image(collection.first()).select('Precipitation_rate_surface_6_Hour_Average').getInfo()['id'])
     # function to sum the values by day
     def sumPrecip(dayOffset, start_):
         start = start_.advance(dayOffset, 'days')
@@ -294,17 +294,19 @@ def retrievePrecipImage(metadate, image, precip_window=10, cum_precip_window=3):
 
     # number of days since last rain
     last_rain = daily \
+                    .filterBounds(image.geometry().bounds()) \
                     .map(maskLowPrecip) \
                     .min() \
                     .rename('last_rain') \
-                    .clip(image.geometry().bounds())
+                    .filterBounds(image.geometry().bounds()) 
 
     # cumulative precipation of last 3 days (agreed in team meeting)
     cum_precip = daily \
+                    .filterBounds(image.geometry().bounds()) \
                     .limit(cum_precip_window, 'custom:index') \
                     .sum() \
                     .rename('sum_precip_priorX') \
-                    .clip(image.geometry().bounds())
+                    
 
     return last_rain, cum_precip
 
