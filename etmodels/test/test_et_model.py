@@ -127,36 +127,37 @@ class TestSsebop(unittest.TestCase):
     def test_ET_model(self):
         self.setUp()
 
-        self.setUp()
-        gfs_et0 = NASA_ET0(
-            study_region=self.study_region,
-            start_date=self.start_date,
-            end_date=self.end_date,
-            scale=10,
-            debug=False,
-        )
-        et0_collection = gfs_et0.calculate_eto_daily()
-        
-        def create_feature(image):
-            feature = ee.Feature(self.study_region, {
-                "datetime": ee.Date(image.get("system:time_start")).format("YYYY-MM-dd"),
-                "et0": ee.Number(image.select("et0").reduceRegion(
-                    ee.Reducer.mean(), self.study_region, scale=27830
-                ).get("et0")
-                )                
-            })
-            return feature
-            
-        et0_collection = et0_collection.map(create_feature).getInfo()
-        
+        with ee.profilePrinting():
 
-        #et0_collection.get("features")[i]["properties"] into a dataframe
-        et0_df = pd.DataFrame(et0_collection.get("features"))
-        et0_df = pd.DataFrame(et0_df["properties"].to_list())
-        
-        
-        
-        print(et0_df)
+            gfs_et0 = NASA_ET0(
+                study_region=self.study_region,
+                start_date=self.start_date,
+                end_date=self.end_date,
+                scale=10,
+                debug=False,
+            )
+            et0_collection = gfs_et0.calculate_eto_daily()
+            
+            def create_feature(image):
+                feature = ee.Feature(self.study_region, {
+                    "datetime": ee.Date(image.get("system:time_start")).format("YYYY-MM-dd"),
+                    "et0": ee.Number(image.select("et0").reduceRegion(
+                        ee.Reducer.mean(), self.study_region, scale=27830
+                    ).get("et0")
+                    )                
+                })
+                return feature
+                
+            et0_collection = et0_collection.map(create_feature).getInfo()
+            
+
+            #et0_collection.get("features")[i]["properties"] into a dataframe
+            et0_df = pd.DataFrame(et0_collection.get("features"))
+            et0_df = pd.DataFrame(et0_df["properties"].to_list())
+            
+            
+            
+            print(et0_df)
 
 
 if __name__ == "__main__":

@@ -1260,8 +1260,8 @@ class GFS_ET0:
         self.collection_name = "NOAA/GFS0P25"
         self.input_collection = (
             ee.ImageCollection(self.collection_name)
+            .filterBounds(self.study_region)
             .filterDate(self.start_date, self.end_date)
-            .map(lambda img: img.clip(self.study_region))
         )
 
     def calculate_eto_daily(
@@ -1411,8 +1411,8 @@ class NASA_ET0:
         self.collection_name = "NASA/GLDAS/V021/NOAH/G025/T3H"
         self.input_collection = (
             ee.ImageCollection(self.collection_name)
+            .filterBounds(self.study_region)
             .filterDate(self.start_date, self.end_date)
-            .map(lambda img: img.clip(self.study_region))
         )
 
     def calculate_eto_daily(
@@ -1423,12 +1423,11 @@ class NASA_ET0:
         method="asce",
     ):
         date_first_image = (
-            ee.Image(self.input_collection.first()).get("system:time_start").getInfo()
+            ee.Image(self.input_collection.first()).get("system:time_start")
         )
         date_last_image = (
             ee.Image(self.input_collection.sort("system:time_start", False).first())
             .get("system:time_start")
-            .getInfo()
         )
         # milisecods to datetime
         date_first_image = datetime.datetime.fromtimestamp(date_first_image / 1000)
