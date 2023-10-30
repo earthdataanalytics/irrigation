@@ -85,9 +85,10 @@ def fexp_spec_ind(image, scale=30):
     lst = image.select('T_LST')
     # RESCALED BRIGHTNESS TEMPERATURE
     # brt_r = image.select('BRT').divide(10).rename('BRT_R');
-    proj = image.select("B").projection()
-    latlon = ee.Image.pixelLonLat().reproject(proj, scale=scale)
-    coords = latlon.select(["longitude", "latitude"])
+    # proj = image.select("B").projection()
+    # latlon = ee.Image.pixelLonLat().reproject(proj, scale=scale)
+    # coords = latlon.select(["longitude", "latitude"])
+    coords = image.pixelLonLat()
 
     # FOR FUTHER USE
     pos_ndvi = ndvi.updateMask(ndvi.gt(0)).rename("pos_NDVI")
@@ -573,12 +574,12 @@ def fexp_sensible_heat_flux(
     # TS HOT PIXEL
     n_Ts_hot = ee.Number(d_hot_pixel.get("temp"))
     # G HOT PIXEL
-    n_G_hot = ee.Number(d_hot_pixel.get("G").getInfo())
+    n_G_hot = ee.Number(d_hot_pixel.get("G"))
     # RN HOT PIXEL
-    n_Rn_hot = ee.Number(d_hot_pixel.get("Rn").getInfo())
+    n_Rn_hot = ee.Number(d_hot_pixel.get("Rn"))
     # LAT AND LON HOT PIXEL
-    n_long_hot = ee.Number(d_hot_pixel.get("x").getInfo())
-    n_lat_hot = ee.Number(d_hot_pixel.get("y").getInfo())
+    n_long_hot = ee.Number(d_hot_pixel.get("x"))
+    n_lat_hot = ee.Number(d_hot_pixel.get("y"))
     # POINT GEOMETRY
     p_hot_pix = ee.Geometry.Point([n_long_hot, n_lat_hot])
 

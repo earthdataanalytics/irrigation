@@ -213,6 +213,12 @@ class TimeSeries():
                         geometry=self.coordinate,
                         scale=scale,
                         maxPixels=Constants.REDUCER_MAX_PIXELS)
+                def extractMinAndMaxValue(var):
+                    return var.reduceRegion(
+                        reducer=ee.Reducer.minMax(),
+                        geometry=self.coordinate,
+                        scale=scale,
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMaxValue(var):
                     return var.reduceRegion(
@@ -225,11 +231,13 @@ class TimeSeries():
                 ET_point = extractValue(ET_daily)
 
                 if calcRegionalET:
-                    ET_min_daily=image.select(['ET_24h'],[NAME_FINAL])
-                    ET_min_point = extractMinValue(ET_min_daily)
-
-                    ET_max_daily=image.select(['ET_24h'],[NAME_FINAL])
-                    ET_max_point = extractMaxValue(ET_max_daily)
+                    
+                    ET = image.select(['ET_24h'],[NAME_FINAL])
+                    ET_MinMax_Daily = extractMinAndMaxValue(ET)
+                    ET_min_daily= ET_MinMax_Daily.get('ET_24h_min')
+                    ET_max_daily= ET_MinMax_Daily.get('ET_24h_max')
+                    
+                    
 
                 NDVI_daily=image.select(['NDVI'],[NAME_FINAL])
                 NDVI_point = extractValue(NDVI_daily)
