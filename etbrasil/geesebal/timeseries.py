@@ -157,7 +157,7 @@ class TimeSeries():
                 slope = ee.Terrain.slope(z_alt)
 
                 #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
-                image=fexp_spec_ind(image, scale=scale)
+                image=fexp_spec_ind(image)
                 
                 #LAND SURFACE TEMPERATURE
                 # TODO: IS THIS CORRECTION NECESSARY? Answer: No, because it uses the brightness temperature
@@ -204,27 +204,27 @@ class TimeSeries():
                     return var.reduceRegion(
                         reducer=ee.Reducer.first(),
                         geometry=self.coordinate,
-                        scale=scale,
+                        scale=Constants.REDUCER_SCALE,
                         maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMinValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.min(),
                         geometry=self.coordinate,
-                        scale=scale,
+                        scale=Constants.REDUCER_SCALE,
                         maxPixels=Constants.REDUCER_MAX_PIXELS)
                 def extractMinAndMaxValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.minMax(),
                         geometry=self.coordinate,
-                        scale=scale,
+                        scale=Constants.REDUCER_SCALE,
                         maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMaxValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.max(),
                         geometry=self.coordinate,
-                        scale=scale,
+                        scale=Constants.REDUCER_SCALE,
                         maxPixels=Constants.REDUCER_MAX_PIXELS)
                 
                 ET_daily=image.select(['ET_24h'],[NAME_FINAL])
@@ -329,7 +329,7 @@ class TimeSeries():
                 image_bands_max = image.reduceRegion(
                 reducer=ee.Reducer.max(),
                 geometry=self.coordinate,
-                scale=scale,
+                scale=Constants.REDUCER_SCALE,
                 maxPixels=Constants.REDUCER_MAX_PIXELS
                 )
                 
@@ -405,7 +405,7 @@ class TimeSeries():
                     .map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0)) 
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     # .aside(print)
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
@@ -415,7 +415,7 @@ class TimeSeries():
                     .map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
@@ -424,7 +424,7 @@ class TimeSeries():
                     .map(f_albedoL8_9)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
@@ -433,7 +433,7 @@ class TimeSeries():
                     .map(f_albedoL8_9)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc9)

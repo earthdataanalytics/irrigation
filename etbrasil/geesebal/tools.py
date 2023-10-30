@@ -26,7 +26,7 @@ from .constants import Constants
 
 
 # SPECTRAL INDICES MODULE
-def fexp_spec_ind(image, scale=30):
+def fexp_spec_ind(image):
     # NORMALIZED DIFFERENCE VEGETATION INDEX (NDVI)
     ndvi = image.normalizedDifference(["NIR", "R"]).rename("NDVI")
 
@@ -127,6 +127,8 @@ def fexp_lst_export(img_main, img_main_RAD, landsat_version, refpoly):
     # NCEP ATMOSPHERIC DATA
     bdate = ee.Date(img_main.get("system:time_start")).format("YYYY-MM-dd")
     edate = ee.Date(bdate).advance(1, "day")
+    
+    t
 
     # SURFACE WATER VAPOUR VARIABLE FROM NCEP
     # NOTE THAT EACH OBSERVATION DURING DAY
@@ -148,7 +150,7 @@ def fexp_lst_export(img_main, img_main_RAD, landsat_version, refpoly):
     d_wv_med = wv.reduceRegion(
         reducer=ee.Reducer.mean(),
         geometry=refpoly,
-        scale=Constants.REDUCER_WP_SCALE,
+        scale=Constants.REDUCER_SCALE,
         maxPixels=Constants.REDUCER_MAX_PIXELS,
     )
     n_wv_med = ee.Number(d_wv_med.get("SRWVAP12"))
@@ -662,7 +664,7 @@ def fexp_sensible_heat_flux(
         d_rah_hot = i_rah.reduceRegion(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
-            scale=scale,
+            scale=Constants.REDUCER_SCALE,
             maxPixels=Constants.REDUCER_MAX_PIXELS,
         )
 
@@ -710,7 +712,7 @@ def fexp_sensible_heat_flux(
         d_H_int = i_H_int.reduceRegion(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
-            scale=scale,
+            scale=Constants.REDUCER_SCALE,
             maxPixels=Constants.REDUCER_MAX_PIXELS,
         )
         n_H_int = ee.Number(d_H_int.get("H"))
@@ -967,7 +969,7 @@ def fexp_sensible_heat_flux_ver_server(
         # AERODYNAMIC RESISTANCE TO HEAT TRANSPORT IN HOT PIXEL
         # BCJ-can decrease maxpixels? what buffersize needed?
         d_rah_hot = i_rah.reduceRegion(
-            reducer=ee.Reducer.first(), geometry=p_hot_pix, scale=scale, maxPixels=5556
+            reducer=ee.Reducer.first(), geometry=p_hot_pix, scale=Constants.REDUCER_SCALE, maxPixels=5556
         )  # 5556 pixels * 900 sqm / pixel = 5e6 sqm = 5 sq km
         # maxPixels = 9000000000) # original
 

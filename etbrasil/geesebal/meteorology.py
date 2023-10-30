@@ -186,9 +186,9 @@ def get_meteorology(image, scale=None):
 
     #CONCATENATES IMAGES
     crs = image.projection()
-    target_scale = scale if scale else crs.nominalScale()
+    # target_scale = scale if scale else crs.nominalScale()
     col_meteorology = ee.Image.cat(rn24h, tair_c, rh, wind_med, swdown24h)
-    col_meteorology = col_meteorology.reproject(crs, scale=target_scale)
+    
 
     out = image.addBands(col_meteorology)
 
@@ -218,13 +218,13 @@ def retrievePrecip(metadate, location, window_days=10, scale=None):
         # convert from kg/m^2/s to mm/s over 6 hours
         precip_conversion_factor = ee.Number(6 * 60 * 60) # num hours in sample * num mins * num secs
 
-        target_scale = scale if scale else image.projection().nominalScale()
+        # target_scale = scale if scale else image.projection().nominalScale()
         
 
         precip_value = image.select('Precipitation_rate_surface_6_Hour_Average').reduceRegion(
           reducer=ee.Reducer.first(),
           geometry=location.centroid(),
-          scale=ee.Number(target_scale)
+          scale=Constants.REDUCER_SCALE,
         ).get('Precipitation_rate_surface_6_Hour_Average')
         precip_value = ee.Number(precip_value)
 

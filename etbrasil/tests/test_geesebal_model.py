@@ -136,7 +136,9 @@ class TestTimeSeries(unittest.TestCase):
                 # Print the ET values
                 
                 # 6.520483310047464
+                print()
                 print(f"ET Values = {et_values}")
+                print()
                 
                 
                 # NOTE: Current values for the test are:
