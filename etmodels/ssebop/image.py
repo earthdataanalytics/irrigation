@@ -14,6 +14,7 @@ try:
 except ImportError:
     import sys
     import os
+
     sys.path.append(os.path.join(os.path.dirname(__file__)))
     import common
     import landsat
@@ -207,7 +208,6 @@ class Image:
 
         # TODO: Move into keyword args section below
         # Convert elr_flag from string to bool IF necessary
-        
 
         # ET fraction type
         # CGM - Should et_fraction_type be set as a kwarg instead?
@@ -269,7 +269,7 @@ class Image:
             self.min_grid_cells_per_image = kwargs["min_grid_cells_per_image"]
         else:
             self.min_grid_cells_per_image = 5
-            
+
         # CALCULATE REFERENCE ET AND WEATHER VARIABLES
         self.collection_et_weather = self.calculate_et_and_weather()
 
@@ -298,7 +298,7 @@ class Image:
         for v in variables:
             if v.lower() == "et":
                 output_images.append(self.et.float())
-                
+
             elif v.lower() == "et_fraction":
                 output_images.append(self.et_fraction.float())
             elif v.lower() == "et_reference":
@@ -315,12 +315,25 @@ class Image:
                 output_images.append(self.quality)
             elif v.lower() == "time":
                 output_images.append(self.time)
+            elif v.lower() == "tmax":
+                output_images.append(self.tmax.float())
+            elif v.lower() == "tmin":
+                output_images.append(self.tmin.float())
+            elif v.lower() == "actual_vapor_pressure":
+                output_images.append(self.actual_vapor_pressure.float())
+            elif v.lower() == "solar_radiation":
+                output_images.append(self.solar_radiation.float())
+            elif v.lower() == "wind_speed":
+                output_images.append(self.wind_speed.float())
+            elif v.lower() == "rain":
+                output_images.append(self.rain.float())
+                
             else:
                 raise ValueError("unsupported variable: {}".format(v))
-            
-        # reduced_image = ee.Image(output_images).set(self._properties)  
-        
-        # # get ndvi mean 
+
+        # reduced_image = ee.Image(output_images).set(self._properties)
+
+        # # get ndvi mean
         # ndvi_mean = self.ndvi.reduceRegion(
         #     reducer=ee.Reducer.mean(),
         #     geometry=self.image.geometry(),
@@ -346,7 +359,7 @@ class Image:
         # Adjust air temperature based on elevation (Elevation Lapse Rate)
         # TODO: Eventually point this at the model.elr_adjust() function instead
         # =========================================================
-       
+
         tmax = self.tmax
 
         if type(self._tcorr_source) is str and self._tcorr_source.upper() == "FANO":
@@ -366,7 +379,6 @@ class Image:
             lst=self.lst, tmax=tmax, tcorr=self.tcorr, dt=dt
         )
 
-
         return et_fraction.set(self._properties).set(
             {
                 "tcorr_index": self.tcorr.get("tcorr_index"),
@@ -377,8 +389,7 @@ class Image:
     @lazy_property
     def et_reference(self):
         """Reference ET for the image date"""
-       
-        
+
         # # Assume the collection is daily with valid system:time_start values
         # gfs_et0 = Calculate_ET0(
         #     study_region=self.image.geometry(),
@@ -388,12 +399,15 @@ class Image:
         #     debug=False,
         #     model="NASA",
         # )
-        et_reference_coll = self.collection_et_weather.select([self.et_reference_band])
-           
+        et_reference_coll = self.collection_et_weather.select(
+            [
+                self.et_reference_band,
+            ]
+        )
+
         et_reference_img = ee.Image(et_reference_coll.first())
         if self.et_reference_resample in ["bilinear", "bicubic"]:
             et_reference_img = et_reference_img.resample(self.et_reference_resample)
-    
 
         if self.et_reference_factor > 1.0:
             et_reference_img = et_reference_img.multiply(self.et_reference_factor)
@@ -423,6 +437,41 @@ class Image:
     def lst(self):
         """Input land surface temperature (LST) [K]"""
         return self.image.select(["lst"]).set(self._properties)
+    
+    @lazy_property
+    def tmax(self):
+        """Input maximum air temperature [K]"""
+        tmax = self.collection_et_weather.select(["tmax"]).mean()
+        return tmax.set(self._properties)
+    
+    @lazy_property
+    def tmin(self):
+        """Input minimum air temperature [K]"""
+        tmin = self.collection_et_weather.select(["tmin"]).mean()
+        return tmin.set(self._properties)
+    
+    @lazy_property
+    def actual_vapor_pressure(self):
+        """Input actual vapor pressure [kPa]"""
+        actual_vapor_pressure = self.collection_et_weather.select(["actual_vapor_pressure"]).mean()
+        return actual_vapor_pressure.set(self._properties)
+    
+    @lazy_property
+    def solar_radiation(self):
+        """Input solar radiation [MJ m-2 day-1]"""
+        solar_radiation = self.collection_et_weather.select(["solar_radiation"]).mean()
+        return solar_radiation.set(self._properties)
+    @lazy_property
+    def wind_speed(self):
+        """Input wind speed [m s-1]"""
+        wind_speed = self.collection_et_weather.select(["wind_speed"]).mean()
+        return wind_speed.set(self._properties)
+    
+    @lazy_property
+    def rain(self):
+        """Input rain [mm]"""
+        rain = self.collection_et_weather.select(["rain"]).mean()
+        return rain.set(self._properties)
 
     @lazy_property
     def mask(self):
@@ -465,7 +514,7 @@ class Image:
     @lazy_property
     def dt(self):
         """
-       
+
         Returns
         -------
         ee.Image
@@ -476,7 +525,7 @@ class Image:
             If `self._dt_source` is not supported.
 
         """
-      
+
         # Assumes a string source is an image collection ID (not an image ID),\
         #   MF: and currently only supports a climatology 'DOY-based' dataset filter
         dt_coll = ee.ImageCollection(self._dt_source).filter(
@@ -488,13 +537,9 @@ class Image:
         dt_scale_factor = ee.Dictionary(
             {"scale_factor": dt_img.get("scale_factor")}
         ).combine({"scale_factor": "1.0"}, overwrite=False)
-        dt_img = dt_img.multiply(
-            ee.Number.parse(dt_scale_factor.get("scale_factor"))
-        )
-        
+        dt_img = dt_img.multiply(ee.Number.parse(dt_scale_factor.get("scale_factor")))
 
         return dt_img.rename("dt")
-
 
     @lazy_property
     def tcorr(self):
@@ -525,12 +570,11 @@ class Image:
 
         """
         # TODO: Make this a class property or method that we can query
-    
+
         tcorr_img = ee.Image(self.tcorr_FANO).select(["tcorr"])
 
         return tcorr_img.rename(["tcorr"])
 
-        
     def calculate_et_and_weather(self):
         gfs_et0 = Calculate_ET0(
             study_region=self.image.geometry(),
@@ -538,15 +582,11 @@ class Image:
             end_date=self._end_date,
             # scale=self.scale,
             debug=False,
-            model="NASA",
-            
+            model=self.et_reference_source ,
         )
-        collection_et_weather = gfs_et0.calculate_eto_daily(
-            add_weather_data=True
-            )
+        collection_et_weather = gfs_et0.calculate_eto_daily(add_weather_data=True)
         return collection_et_weather
-        
-        
+
     @lazy_property
     def tmax(self):
         """Get Tmax image from precomputed climatology collections or dynamically
@@ -561,11 +601,11 @@ class Image:
             If `self._tmax_source` is not supported.
 
         """
-        
+
         # Process Tmax source as a collection ID
         # The new Tmax collections do not have a time_start so filter using
         #   the "doy" property instead
-         # Assume the collection is daily with valid system:time_start values
+        # Assume the collection is daily with valid system:time_start values
         # gfs_et0 = Calculate_ET0(
         #     study_region=self.image.geometry(),
         #     start_date=self._start_date,
@@ -573,16 +613,14 @@ class Image:
         #     # scale=self.scale,
         #     debug=False,
         #     model="NASA",
-            
+
         # )
         tmax_coll = self.collection_et_weather.select(["tmax"])
         # tmax_coll = ee.ImageCollection(self._tmax_source).filterMetadata(
         #     "doy", "equals", self._doy
         # )
         #     .filterMetadata('doy', 'equals', self._doy.format('%03d'))
-        tmax_image = ee.Image(tmax_coll.first()).set(
-            {"tmax_source": self._tmax_source}
-        )
+        tmax_image = ee.Image(tmax_coll.first()).set({"tmax_source": self._tmax_source})
 
         if self._tmax_resample and self._tmax_resample.lower() in [
             "bilinear",
@@ -593,10 +631,6 @@ class Image:
         # tmax_image = tmax_image.reproject(self.crs, self.transform)
 
         return tmax_image
-
-  
-
-    
 
     @classmethod
     def from_landsat_c1_sr(cls, sr_image, cloudmask_args={}, **kwargs):
@@ -670,9 +704,7 @@ class Image:
             )
         )
 
-        cloud_mask = common.landsat_c1_sr_cloud_mask(
-            sr_image, **cloudmask_args
-        )
+        cloud_mask = common.landsat_c1_sr_cloud_mask(sr_image, **cloudmask_args)
 
         # Build the input image
         input_image = ee.Image(
@@ -822,9 +854,7 @@ class Image:
         # if 'saturated_flag' not in cloudmask_args.keys():
         #     cloudmask_args['saturated_flag'] = True
 
-        cloud_mask = common.landsat_c2_sr_cloud_mask(
-            sr_image, **cloudmask_args
-        )
+        cloud_mask = common.landsat_c2_sr_cloud_mask(sr_image, **cloudmask_args)
 
         # Check if passing c2_lst_correct or soil_emis_coll_id arguments
         if "c2_lst_correct" in kwargs.keys():
@@ -837,9 +867,7 @@ class Image:
             c2_lst_correct = cls._C2_LST_CORRECT
 
         if c2_lst_correct:
-            lst = common.landsat_c2_sr_lst_correct(
-                sr_image, landsat.ndvi(prep_image)
-            )
+            lst = common.landsat_c2_sr_lst_correct(sr_image, landsat.ndvi(prep_image))
         else:
             lst = prep_image.select(["tir"])
 
@@ -866,8 +894,6 @@ class Image:
         # Instantiate the class
         return cls(input_image, reflectance_type="SR", **kwargs)
 
-    
-
     @lazy_property
     def tcorr_image_hot(self):
         """Compute the scene wide HOT Tcorr for the current image
@@ -881,7 +907,7 @@ class Image:
         lst = ee.Image(self.lst)
         ndvi = ee.Image(self.ndvi)
         tmax = ee.Image(self.tmax)
-        dt = ee.Image(self.dt) 
+        dt = ee.Image(self.dt)
         # TODO need lc mask for barren landcover
         lc = None
 
@@ -1092,6 +1118,3 @@ class Image:
             maxPixels=2 * 10000 * 10000,
             tileScale=1,
         )
-
-
-  

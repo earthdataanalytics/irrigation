@@ -1202,6 +1202,7 @@ class Daily:
         # add values to pandas
         return
 
+
 class Calculate_ET0:
     """
     NASA Global Land Data Assimilation System Version 2 (GLDAS-2) has three components: GLDAS-2.0, GLDAS-2.1, and GLDAS-2.2. GLDAS-2.0 is forced entirely with the Princeton meteorological forcing input data and provides a temporally consistent series from 1948 through 2014. GLDAS-2.1 is forced with a combination of model and observation data from 2000 to present. GLDAS-2.2 product suites use data assimilation (DA), whereas the GLDAS-2.0 and GLDAS-2.1 products are "open-loop" (i.e., no data assimilation). The choice of forcing data, as well as DA observation source, variable, and scheme, vary for different GLDAS-2.2 products.GLDAS-2.1 is one of two components of the GLDAS Version 2 (GLDAS-2) dataset, the second being GLDAS-2.0. GLDAS-2.1 is analogous to GLDAS-1 product stream, with upgraded models forced by a combination of GDAS, disaggregated GPCP, and AGRMET radiation data sets.
@@ -1221,7 +1222,7 @@ class Calculate_ET0:
         scale=10,
         debug=False,
         landsat_cs=30,
-        model="NASA" # NASA, GFS
+        model="NASA",  # NASA, GFS, ECMWF
     ):
         self.study_region = study_region
         self.start_date = ee.Date(start_date)
@@ -1238,6 +1239,8 @@ class Calculate_ET0:
             self.collection_name = "NASA/GLDAS/V021/NOAH/G025/T3H"
         elif model == "GFS":
             self.collection_name = "NOAA/GFS0P25"
+        elif model == "ECMWF":
+            self.collection_name = "ECMWF/ERA5_LAND/HOURLY"
         else:
             raise ValueError("Unsupported model input, please use NASA or GFS")
         self.input_collection = (
@@ -1245,15 +1248,8 @@ class Calculate_ET0:
             .filterBounds(self.study_region)
             .filterDate(self.start_date, self.end_date)
         )
-        
 
-    def calculate_eto_daily(
-        self,
-        zw=None,
-        elev=None,
-        lat=None,
-        add_weather_data = False
-    ):
+    def calculate_eto_daily(self, zw=None, elev=None, lat=None, add_weather_data=False):
         ## COSTANT VALUES
         if zw is None:
             zw = ee.Number(2)
@@ -1266,33 +1262,42 @@ class Calculate_ET0:
                 "projects/openet/assets/meteorology/era5land/ancillary/latitude"
             )
 
-        def wind_magnitude(input_img):
-            """Compute hourly wind magnitude from vectors"""
-            return (
-                ee.Image(input_img.select(["u_component_of_wind_10m_above_ground"]))
-                .pow(2)
-                .add(
-                    ee.Image(
-                        input_img.select(["v_component_of_wind_10m_above_ground"])
-                    ).pow(2)
-                )
-                .sqrt()
-                .rename(["wind"])
-            )
-            
+        
+
         def etDayNasa(dayOffset):
             start = self.start_date.advance(dayOffset, "days")
             end = start.advance(1, "days")
-            
-            tmax = self.input_collection.select(["Tair_f_inst"]).filterDate(start, end).max().subtract(273.15)
-            tmin = self.input_collection.select(["Tair_f_inst"]).filterDate(start, end).min().subtract(273.15)
-            mean_values = self.input_collection.select(["Qair_f_inst", "Swnet_tavg", "Wind_f_inst"]).filterDate(start, end).mean()
+
+            tmax = (
+                self.input_collection.select(["Tair_f_inst"])
+                .filterDate(start, end)
+                .max()
+                .subtract(273.15)
+            )
+            tmin = (
+                self.input_collection.select(["Tair_f_inst"])
+                .filterDate(start, end)
+                .min()
+                .subtract(273.15)
+            )
+            mean_values = (
+                self.input_collection.select(
+                    ["Qair_f_inst", "Swnet_tavg", "Wind_f_inst"]
+                )
+                .filterDate(start, end)
+                .mean()
+            )
             actual_vapor_pressure = calcs._actual_vapor_pressure(
                 pair=calcs._air_pressure(elev, self.method),
                 q=mean_values.select(["Qair_f_inst"]),
             )
             solar_radiation = mean_values.select(["Swnet_tavg"]).multiply(0.0864)
             wind_speed = mean_values.select(["Wind_f_inst"])
+            rain = (
+                self.input_collection.select(["Rainf_f_tavg"])
+                .filterDate(start, end)
+                .sum()
+            )
             doy = ee.Number(start.getRelative("day", "year")).add(1).double()
             et_daily = Daily(
                 tmax=tmax,
@@ -1307,7 +1312,7 @@ class Calculate_ET0:
                 method=self.method,
                 rso_type=self.rso_type,
             )
-            
+
             et_daily_image = et_daily.eto
             # add etr
             et_daily_image = et_daily_image.addBands(et_daily.etr)
@@ -1317,29 +1322,63 @@ class Calculate_ET0:
                 # add tmin
                 et_daily_image = et_daily_image.addBands(tmin.rename("tmin"))
                 # add ea
-                et_daily_image = et_daily_image.addBands(actual_vapor_pressure.rename("actual_vapor_pressure"))
+                et_daily_image = et_daily_image.addBands(
+                    actual_vapor_pressure.rename("actual_vapor_pressure")
+                )
                 # add rs
-                et_daily_image = et_daily_image.addBands(solar_radiation.rename("solar_radiation"))
+                et_daily_image = et_daily_image.addBands(
+                    solar_radiation.rename("solar_radiation")
+                )
                 # add uz
-                et_daily_image = et_daily_image.addBands(wind_speed.rename("wind_speed"))
-            
+                et_daily_image = et_daily_image.addBands(
+                    wind_speed.rename("wind_speed")
+                )
+                # precipitation
+                et_daily_image = et_daily_image.addBands(rain.rename("rain"))
+
             # add date
             et_daily_image = et_daily_image.set("system:time_start", start.millis())
-            
+
             return et_daily_image
-        
+
         def etDayGFS(dayOffset):
             start = self.start_date.advance(dayOffset, "days")
             end = start.advance(1, "days")
-            
-            tmax = self.input_collection.select(["temperature_2m_above_ground"]).filterDate(start, end).max().subtract(273.15)
-            tmin = self.input_collection.select(["temperature_2m_above_ground"]).filterDate(start, end).min().subtract(273.15)
-            mean_values = self.input_collection.select(["specific_humidity_2m_above_ground", "v_component_of_wind_10m_above_ground", "u_component_of_wind_10m_above_ground", "downward_shortwave_radiation_flux"]).filterDate(start, end).mean()
+
+            tmax = (
+                self.input_collection.select(["temperature_2m_above_ground"])
+                .filterDate(start, end)
+                .max()
+                .subtract(273.15)
+            )
+            tmin = (
+                self.input_collection.select(["temperature_2m_above_ground"])
+                .filterDate(start, end)
+                .min()
+                .subtract(273.15)
+            )
+            mean_values = (
+                self.input_collection.select(
+                    [
+                        "specific_humidity_2m_above_ground",
+                        "v_component_of_wind_10m_above_ground",
+                        "u_component_of_wind_10m_above_ground",
+                        "downward_shortwave_radiation_flux",
+                    ]
+                )
+                .filterDate(start, end)
+                .mean()
+            )
             actual_vapor_pressure = calcs._actual_vapor_pressure(
                 pair=calcs._air_pressure(elev, self.method),
                 q=mean_values.select(["specific_humidity_2m_above_ground"]),
             )
-            solar_radiation = mean_values.select(["downward_shortwave_radiation_flux", "v_component_of_wind_10m_above_ground"]).multiply(0.0864)
+            solar_radiation = mean_values.select(
+                [
+                    "downward_shortwave_radiation_flux",
+                    "v_component_of_wind_10m_above_ground",
+                ]
+            ).multiply(0.0864)
             wind_speed = (
                 mean_values.select(
                     [
@@ -1350,6 +1389,16 @@ class Calculate_ET0:
                 .map(lambda img: wind_magnitude(img))
                 .mean()
             )
+            # TODO: I am not sure if this is the correct way to calculate rain
+            # check https://developers.google.com/earth-engine/datasets/catalog/NOAA_GFS0P25#bands
+            #
+            # total_precipitation_surface is the Cumulative precipitation at surface for the previous 1-6 hours, depending on the value of the "forecast_hours" property according to the formula ((F - 1) % 6) + 1.
+            # As a consequence, to calculate the total precipitation by hour X, double-counting should be avoid by only summing the values for forecast_hours that are multiples of 6 plus any remainder to reach X. It also means that to determine the precipitation for just hour X, one must subtract the value for the preceding hour unless X is the first hour in a 6-hour window.
+            rain = (
+                self.input_collection.select(["total_precipitation_surface"])
+                .filterDate(start, end)
+                .sum()
+            )
             doy = ee.Number(start.getRelative("day", "year")).add(1).double()
             et_daily = Daily(
                 tmax=tmax,
@@ -1364,7 +1413,7 @@ class Calculate_ET0:
                 method=self.method,
                 rso_type=self.rso_type,
             )
-            
+
             et_daily_image = et_daily.eto
             # add etr
             et_daily_image = et_daily_image.addBands(et_daily.etr)
@@ -1374,29 +1423,143 @@ class Calculate_ET0:
                 # add tmin
                 et_daily_image = et_daily_image.addBands(tmin.rename("tmin"))
                 # add ea
-                et_daily_image = et_daily_image.addBands(actual_vapor_pressure.rename("actual_vapor_pressure"))
+                et_daily_image = et_daily_image.addBands(
+                    actual_vapor_pressure.rename("actual_vapor_pressure")
+                )
                 # add rs
-                et_daily_image = et_daily_image.addBands(solar_radiation.rename("solar_radiation"))
+                et_daily_image = et_daily_image.addBands(
+                    solar_radiation.rename("solar_radiation")
+                )
                 # add uz
-                et_daily_image = et_daily_image.addBands(wind_speed.rename("wind_speed"))
-                
+                et_daily_image = et_daily_image.addBands(
+                    wind_speed.rename("wind_speed")
+                )
+
+                # precipitation
+                et_daily_image = et_daily_image.addBands(rain.rename("rain"))
+
             # add date
             et_daily_image = et_daily_image.set("system:time_start", start.millis())
+
+            return et_daily_image
+
+        def etDayECMWF(dayOffset):
+            start = self.start_date.advance(dayOffset, "days")
+            end = start.advance(1, "days")
+            zw = ee.Number(10)
+
+            tmax = (
+                self.input_collection.select(["temperature_2m"])
+                .filterDate(start, end)
+                .max()
+                .subtract(273.15)
+            )
+            tmin = (
+                self.input_collection.select(["temperature_2m"])
+                .filterDate(start, end)
+                .min()
+                .subtract(273.15)
+            )
+            mean_values = (
+                self.input_collection.select(
+                    [
+                        "dewpoint_temperature_2m",
+                        "surface_solar_radiation_downwards",
+                        "u_component_of_wind_10m",
+                        "v_component_of_wind_10m"
+                    ]
+                )
+                .filterDate(start, end)
+                .mean()
+            )
+            def wind_magnitude(input_img):
+                """Compute hourly wind magnitude from vectors"""
+                return (
+                    ee.Image(input_img.select(["u_component_of_wind_10m"]))
+                    .pow(2)
+                    .add(
+                        ee.Image(
+                            input_img.select(["v_component_of_wind_10m"])
+                        ).pow(2)
+                    )
+                    .sqrt()
+                    .rename(["uz"])
+                )
+            actual_vapor_pressure = calcs._sat_vapor_pressure(
+                mean_values.select(["dewpoint_temperature_2m"]).subtract(273.15)
+            )
+            solar_radiation = mean_values.select(
+                ["surface_solar_radiation_downwards"]
+            ).divide(1000000)
             
+            wind_speed = wind_magnitude(mean_values)
+            # wind_speed = ee.ImageCollection(self.input_collection.map(wind_magnitude)).mean()
+
+            rain = (
+                self.input_collection.select(["total_precipitation_hourly"])
+                .filterDate(start, end)
+                .sum()
+            )
+
+            doy = ee.Number(start.getRelative("day", "year")).add(1).double()
+            et_daily = Daily(
+                tmax=tmax,
+                tmin=tmin,
+                ea=actual_vapor_pressure,
+                rs=solar_radiation,
+                uz=wind_speed,
+                zw=zw,
+                elev=elev,
+                lat=lat,
+                doy=doy,
+                method=self.method,
+                rso_type=self.rso_type,
+            )
+
+            et_daily_image = et_daily.eto
+            # add etr
+            et_daily_image = et_daily_image.addBands(et_daily.etr)
+            if add_weather_data:
+                # add tmax with the name tempmax
+                et_daily_image = et_daily_image.addBands(tmax.rename("tmax"))
+                # add tmin
+                et_daily_image = et_daily_image.addBands(tmin.rename("tmin"))
+                # add ea
+                et_daily_image = et_daily_image.addBands(
+                    actual_vapor_pressure.rename("actual_vapor_pressure")
+                )
+                # add rs
+                et_daily_image = et_daily_image.addBands(
+                    solar_radiation.rename("solar_radiation")
+                )
+                # add uz
+                et_daily_image = et_daily_image.addBands(
+                    wind_speed.rename("wind_speed")
+                )
+
+                # precipitation
+                et_daily_image = et_daily_image.addBands(rain.rename("rain"))
+
+            # add date
+            et_daily_image = et_daily_image.set("system:time_start", start.millis())
+
             return et_daily_image
 
         numberOfDays = self.end_date.difference(self.start_date, "days")
-        
-        if(self.model == "NASA"):
+
+        if self.model == "NASA":
             daily = ee.ImageCollection(
                 ee.List.sequence(0, numberOfDays.subtract(1)).map(etDayNasa)
             )
-        elif(self.model == "GFS"):
+        elif self.model == "GFS":
             daily = ee.ImageCollection(
                 ee.List.sequence(0, numberOfDays.subtract(1)).map(etDayGFS)
             )
+        elif self.model == "ECMWF":
+            daily = ee.ImageCollection(
+                ee.List.sequence(0, numberOfDays.subtract(1)).map(etDayECMWF)
+            )
         else:
             raise ValueError("Unsupported model input, please use NASA or GFS")
-        
-        return daily
 
+        return daily

@@ -57,7 +57,7 @@ class TestSsebop(unittest.TestCase):
 
         # self.et_reference_source = "projects/openet/reference_et/cimis/daily"
         # self.et_reference_band = "etr_asce"
-        self.et_reference_source = "NASA"
+        self.et_reference_source = "ECMWF"
         self.et_reference_band = "et0"
         self.et_reference_factor = 1.0
         self.et_reference_resample = "nearest"
@@ -168,7 +168,19 @@ class TestSsebop(unittest.TestCase):
                 return pd.DataFrame.from_dict(info_dict)
 
             overpass_coll = model_obj.overpass(
-                variables=["ndvi", "et", "et_reference", "et_fraction"]
+                variables=[
+                    "ndvi",
+                    "et",
+                    "et_reference",
+                    "et_fraction",
+                    "lst",
+                    "tmax",
+                    "tmin",
+                    "actual_vapor_pressure",
+                    "solar_radiation",
+                    "wind_speed",
+                    "rain",
+                ]
             )
 
             overpass_df = get_region_df(

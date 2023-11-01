@@ -169,9 +169,9 @@ class TestSsebop(unittest.TestCase):
                 end_date=self.end_date,
                 scale=10,
                 debug=False,
-                model="NASA",
+                model="ECMWF",
             )
-            et0_collection = gfs_et0.calculate_eto_daily()
+            et0_collection = gfs_et0.calculate_eto_daily(add_weather_data=True)
 
             def create_feature_polygone(image):
                 feature = ee.Feature(
@@ -203,6 +203,50 @@ class TestSsebop(unittest.TestCase):
                                 ee.Reducer.mean(), self.test_point, scale=27830
                             )
                             .get("et0")
+                        ),
+                        "tmax": ee.Number(
+                            image.select("tmax")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("tmax")
+                        ),
+                        "tmin": ee.Number(
+                            image.select("tmin")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("tmin")
+                        ),
+                        
+                        "actual_vapor_pressure": ee.Number(
+                            image.select("actual_vapor_pressure")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("actual_vapor_pressure")
+                        ),
+                        "solar_radiation": ee.Number(
+                            image.select("solar_radiation")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("solar_radiation")
+                        ),
+                        "wind_speed": ee.Number(
+                            image.select("wind_speed")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("wind_speed")
+                        ),
+
+                        "rain": ee.Number(
+                            image.select("rain")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("rain")
                         ),
                     },
                 )

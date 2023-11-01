@@ -2,6 +2,7 @@
 # #     from importlib import metadata
 # # except ImportError:  # for Python<3.8
 # #     import importlib_metadata as metadata
+from .timeseries import TimeSeries
 
 # from .image import Image
 # from .collection import Collection
