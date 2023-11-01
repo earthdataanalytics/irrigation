@@ -1245,12 +1245,14 @@ class Calculate_ET0:
             .filterBounds(self.study_region)
             .filterDate(self.start_date, self.end_date)
         )
+        
 
     def calculate_eto_daily(
         self,
         zw=None,
         elev=None,
         lat=None,
+        add_weather_data = False
     ):
         ## COSTANT VALUES
         if zw is None:
@@ -1309,6 +1311,18 @@ class Calculate_ET0:
             et_daily_image = et_daily.eto
             # add etr
             et_daily_image = et_daily_image.addBands(et_daily.etr)
+            if add_weather_data:
+                # add tmax
+                et_daily_image = et_daily_image.addBands(tmax.rename("tmax"))
+                # add tmin
+                et_daily_image = et_daily_image.addBands(tmin.rename("tmin"))
+                # add ea
+                et_daily_image = et_daily_image.addBands(actual_vapor_pressure.rename("actual_vapor_pressure"))
+                # add rs
+                et_daily_image = et_daily_image.addBands(solar_radiation.rename("solar_radiation"))
+                # add uz
+                et_daily_image = et_daily_image.addBands(wind_speed.rename("wind_speed"))
+            
             # add date
             et_daily_image = et_daily_image.set("system:time_start", start.millis())
             
@@ -1354,6 +1368,18 @@ class Calculate_ET0:
             et_daily_image = et_daily.eto
             # add etr
             et_daily_image = et_daily_image.addBands(et_daily.etr)
+            if add_weather_data:
+                # add tmax with the name tempmax
+                et_daily_image = et_daily_image.addBands(tmax.rename("tmax"))
+                # add tmin
+                et_daily_image = et_daily_image.addBands(tmin.rename("tmin"))
+                # add ea
+                et_daily_image = et_daily_image.addBands(actual_vapor_pressure.rename("actual_vapor_pressure"))
+                # add rs
+                et_daily_image = et_daily_image.addBands(solar_radiation.rename("solar_radiation"))
+                # add uz
+                et_daily_image = et_daily_image.addBands(wind_speed.rename("wind_speed"))
+                
             # add date
             et_daily_image = et_daily_image.set("system:time_start", start.millis())
             

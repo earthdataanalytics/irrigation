@@ -45,7 +45,7 @@ class TestSsebop(unittest.TestCase):
 
         self.image_size = 768
         self.landsat_cs = 30
-        self.start_date = "2023-05-01"
+        self.start_date = "2023-01-01"
         self.end_date = "2023-07-01"
 
         self.collections = [
@@ -74,34 +74,34 @@ class TestSsebop(unittest.TestCase):
         # Interpolation method - currently only LINEAR is supported
         self.interp_method = "LINEAR"
 
-        self.test_point = ee.Geometry.Point([-121.80027912713243, 38.53764735054985])
-
-        self.study_area = ee.Geometry.Polygon(
-            [
-                [
-                    [-121.84027912713243, 38.5592113359509],
-                    [-121.84027912713243, 38.50764735054985],
-                    [-121.75376179314806, 38.50764735054985],
-                    [-121.75376179314806, 38.5592113359509],
-                ]
-            ],
-            None,
-            False,
-        )
-        # self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
+        # self.test_point = ee.Geometry.Point([-121.80027912713243, 38.53764735054985])
 
         # self.study_area = ee.Geometry.Polygon(
         #     [
         #         [
-        #             [-4.59673559330618, 37.87785028383721],
-        #             [-4.59673559330618, 37.86490927780263],
-        #             [-4.579054471480008, 37.86490927780263],
-        #             [-4.579054471480008, 37.87785028383721],
+        #             [-121.84027912713243, 38.5592113359509],
+        #             [-121.84027912713243, 38.50764735054985],
+        #             [-121.75376179314806, 38.50764735054985],
+        #             [-121.75376179314806, 38.5592113359509],
         #         ]
         #     ],
         #     None,
         #     False,
         # )
+        self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
+
+        self.study_area = ee.Geometry.Polygon(
+            [
+                [
+                    [-4.59673559330618, 37.87785028383721],
+                    [-4.59673559330618, 37.86490927780263],
+                    [-4.579054471480008, 37.86490927780263],
+                    [-4.579054471480008, 37.87785028383721],
+                ]
+            ],
+            None,
+            False,
+        )
 
         self.study_region = self.study_area.bounds(1, "EPSG:4326")
         self.study_crs = "EPSG:32610"
@@ -109,8 +109,9 @@ class TestSsebop(unittest.TestCase):
     @time_controller.timeit
     def test_TimeSeries(self):
         self.setUp()
-        debug = False
-        with ee.profilePrinting():
+        debug = True
+        profile_enabled = False
+        def run_test():
             model_obj = Collection(
                 collections=self.collections,
                 et_reference_source=self.et_reference_source,
@@ -253,6 +254,12 @@ class TestSsebop(unittest.TestCase):
 
                 et_img.show()
                 et_reference_img.show()
+        if profile_enabled:
+            with ee.profilePrinting():
+                run_test()
+        else:
+            run_test()
+            
 
 
 if __name__ == "__main__":

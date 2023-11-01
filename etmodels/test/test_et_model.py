@@ -52,8 +52,8 @@ class TestSsebop(unittest.TestCase):
 
         self.image_size = 768
         self.landsat_cs = 30
-        self.start_date = "2023-04-10"
-        self.end_date = "2023-05-12"
+        self.start_date = "2023-01-01"
+        self.end_date = "2023-07-01"
 
         # self.et_reference_source = "projects/openet/reference_et/cimis/daily"
         # self.et_reference_band = "etr_asce"
@@ -74,7 +74,7 @@ class TestSsebop(unittest.TestCase):
         # Interpolation method - currently only LINEAR is supported
         self.interp_method = "LINEAR"
 
-        self.test_point = ee.Geometry.Point([-4.59, 37.86])
+        # self.test_point = ee.Geometry.Point([-4.59, 37.86])
 
         """ self.study_area = ee.Geometry.Polygon(
             [
@@ -100,7 +100,8 @@ class TestSsebop(unittest.TestCase):
         #     None,
         #     False,
         # )
-        # self.test_point = ee.Geometry.Point([-4.59, 37.86])
+
+        self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
 
         self.study_area = ee.Geometry.Polygon(
             [
@@ -250,6 +251,11 @@ class TestSsebop(unittest.TestCase):
             # et0_collection.get("features")[i]["properties"] into a dataframe
             et0_df = pd.DataFrame(et0_collection_info.get("features"))
             et0_df = pd.DataFrame(et0_df["properties"].to_list())
+
+            # find when datetime is 16-04-2023
+            et0_df["datetime"] = pd.to_datetime(et0_df["datetime"])
+            et0_df = et0_df.set_index("datetime")
+            print(et0_df.loc["2023-04-16":"2023-04-17"])
 
             print(et0_df)
 
