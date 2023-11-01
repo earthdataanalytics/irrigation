@@ -33,7 +33,7 @@ class TestTimeSeries(unittest.TestCase):
         self.day_i = 12
         self.year_e = 2023
         self.month_e = 5
-        self.day_e = 20
+        self.day_e = 15
         self.cloud_cover = 20
         # self.buffersize = 90
         # self.NDVI_cold = 5
