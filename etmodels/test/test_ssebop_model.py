@@ -46,7 +46,7 @@ class TestSsebop(unittest.TestCase):
         self.image_size = 768
         self.landsat_cs = 30
         self.start_date = "2023-01-01"
-        self.end_date = "2023-07-01"
+        self.end_date = "2023-02-01"
 
         self.collections = [
             "LANDSAT/LC09/C02/T1_L2",
@@ -74,6 +74,7 @@ class TestSsebop(unittest.TestCase):
         # Interpolation method - currently only LINEAR is supported
         self.interp_method = "LINEAR"
 
+        ## DAVIS TEST POINT
         # self.test_point = ee.Geometry.Point([-121.80027912713243, 38.53764735054985])
 
         # self.study_area = ee.Geometry.Polygon(
@@ -88,15 +89,34 @@ class TestSsebop(unittest.TestCase):
         #     None,
         #     False,
         # )
-        self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
+
+        # CORDOBA RAINFED TEST POINT
+        # self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
+
+        # self.study_area = ee.Geometry.Polygon(
+        #     [
+        #         [
+        #             [-4.6535445911386715, 37.901649775506776],
+        #             [-4.6535445911386715, 37.834434812504895],
+        #             [-4.541621373365234, 37.834434812504895],
+        #             [-4.541621373365234, 37.901649775506776],
+        #         ]
+        #     ],
+        #     None,
+        #     False,
+        # )
+
+        ## TEST POINT IN EGYPT
+        ## BEST DATES BETWEEN JANUARY AND MARCH
+        self.test_point = ee.Geometry.Point([28.24507697531175, 22.526226362429686])
 
         self.study_area = ee.Geometry.Polygon(
             [
                 [
-                    [-4.59673559330618, 37.87785028383721],
-                    [-4.59673559330618, 37.86490927780263],
-                    [-4.579054471480008, 37.86490927780263],
-                    [-4.579054471480008, 37.87785028383721],
+                    [28.1248764877901, 22.58011855501831],
+                    [28.1248764877901, 22.38597531123633],
+                    [28.3006577377901, 22.38597531123633],
+                    [28.3006577377901, 22.58011855501831],
                 ]
             ],
             None,
@@ -104,13 +124,14 @@ class TestSsebop(unittest.TestCase):
         )
 
         self.study_region = self.study_area.bounds(1, "EPSG:4326")
-        self.study_crs = "EPSG:32610"
+        self.study_crs = "EPSG:4326"
 
     @time_controller.timeit
     def test_TimeSeries(self):
         self.setUp()
         debug = True
         profile_enabled = False
+
         def run_test():
             model_obj = Collection(
                 collections=self.collections,
@@ -174,39 +195,39 @@ class TestSsebop(unittest.TestCase):
                 ndvi_img = PILImage.open(requests.get(ndvi_url, stream=True).raw)
                 ndvi_img.show()
 
-                et_fraction_urk = (
-                    ee.Image(overpass_coll.select(["et_fraction"]).mean())
-                    .reproject(crs=self.study_crs, scale=30)
-                    .getThumbURL(
-                        {
-                            "min": 0.0,
-                            "max": 1.2,
-                            "palette": ",".join(self.et_palette),
-                            "region": self.study_region,
-                            "dimensions": self.image_size,
-                        }
-                    )
-                )
+                # et_fraction_urk = (
+                #     ee.Image(overpass_coll.select(["et_fraction"]).mean())
+                #     .reproject(crs=self.study_crs, scale=30)
+                #     .getThumbURL(
+                #         {
+                #             "min": 0.0,
+                #             "max": 1.2,
+                #             "palette": ",".join(self.et_palette),
+                #             "region": self.study_region,
+                #             "dimensions": self.image_size,
+                #         }
+                #     )
+                # )
 
-                et_fraction_img = PILImage.open(
-                    requests.get(et_fraction_urk, stream=True).raw
-                )
+                # et_fraction_img = PILImage.open(
+                #     requests.get(et_fraction_urk, stream=True).raw
+                # )
 
-                et_fraction_img.show()
+                # et_fraction_img.show()
 
-                daily_coll = model_obj.interpolate(
-                    t_interval="daily",
-                    variables=["et", "et_reference", "et_fraction"],
-                    interp_method=self.interp_method,
-                    interp_days=self.interp_days,
-                )
+                # daily_coll = model_obj.interpolate(
+                #     t_interval="daily",
+                #     variables=["et", "et_reference", "et_fraction"],
+                #     interp_method=self.interp_method,
+                #     interp_days=self.interp_days,
+                # )
 
-                daily_df = get_region_df(
-                    daily_coll.getRegion(self.test_point, scale=30).getInfo()
-                )
+                # daily_df = get_region_df(
+                #     daily_coll.getRegion(self.test_point, scale=30).getInfo()
+                # )
 
-                print(daily_df)
-                print("")
+                # print(daily_df)
+                # print("")
                 monthly_coll = model_obj.interpolate(
                     t_interval="monthly",
                     variables=["et", "et_reference", "et_fraction"],
@@ -219,28 +240,28 @@ class TestSsebop(unittest.TestCase):
                 )
                 print(monthly_df)
 
+                # image_url = (
+                #     ee.Image(monthly_coll.select(["et"]).sum())
+                #     .reproject(crs=self.study_crs, scale=100)
+                #     .getThumbURL(
+                #         {
+                #             "min": 0.0,
+                #             "max": 350,
+                #             "palette": self.et_palette,
+                #             "region": self.study_region,
+                #             "dimensions": self.image_size,
+                #         }
+                #     )
+                # )
+                # et_img = PILImage.open(requests.get(image_url, stream=True).raw)
+                max_et = monthly_df["et"].max()
                 image_url = (
                     ee.Image(monthly_coll.select(["et"]).sum())
-                    .reproject(crs=self.study_crs, scale=100)
+                    # .reproject(crs=self.study_crs, scale=100)
                     .getThumbURL(
                         {
                             "min": 0.0,
-                            "max": 350,
-                            "palette": self.et_palette,
-                            "region": self.study_region,
-                            "dimensions": self.image_size,
-                        }
-                    )
-                )
-                et_img = PILImage.open(requests.get(image_url, stream=True).raw)
-
-                image_url = (
-                    ee.Image(monthly_coll.select(["et_reference"]).sum())
-                    .reproject(crs=self.study_crs, scale=100)
-                    .getThumbURL(
-                        {
-                            "min": 0.0,
-                            "max": 350,
+                            "max": max_et,
                             "palette": self.et_palette,
                             "region": self.study_region,
                             "dimensions": self.image_size,
@@ -251,15 +272,14 @@ class TestSsebop(unittest.TestCase):
                 et_reference_img = PILImage.open(
                     requests.get(image_url, stream=True).raw
                 )
-
-                et_img.show()
                 et_reference_img.show()
+                # et_reference_img.show()
+
         if profile_enabled:
             with ee.profilePrinting():
                 run_test()
         else:
             run_test()
-            
 
 
 if __name__ == "__main__":
