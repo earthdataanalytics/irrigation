@@ -113,7 +113,7 @@ def fexp_landsat_7Coordinate(start_date, end_date, coordinate, th_cloud_cover):
 def fexp_landsat_8Coordinate(start_date, end_date, coordinate, th_cloud_cover):
     col_SR_L8 = (
         ee.ImageCollection(Constants.LANDSAT_COLLECTION_8)
-        .select(Constants.LANDSAT_5_7_BANDS["OFFICIAL"] + Constants.LANDSAT_ADDITIONAL_BANDS)
+        .select(Constants.LANDSAT_8_BANDS["OFFICIAL"] + Constants.LANDSAT_ADDITIONAL_BANDS)
         .filterBounds(coordinate)
         .filterDate(start_date, end_date)
         .map(prepSrLandsat8and9)
