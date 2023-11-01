@@ -347,15 +347,26 @@ class Collection():
                 elif 'LC09' in coll_id:
                     input_coll = input_coll.filter(ee.Filter.gt(
                         'system:time_start', ee.Date('2022-01-01').millis()))
-
+                    
+                
+                
                 def compute_vars(image):
                     model_obj = Image.from_landsat_c2_sr(
                         sr_image=ee.Image(image), **self.model_args)
                     return model_obj.calculate(variables)
+                
+              
 
                 # Skip going into image class if variables is not set so raw
                 #   landsat collection can be returned for getting image_id_list
+               
                 if variables:
+                    # ## TODO: DEBUG. DELETE THIS
+                    # image_collect_first = input_coll.first()
+                
+                    # image_compute_vars = compute_vars(image_collect_first)
+                
+                    ###########################
                     input_coll = ee.ImageCollection(input_coll.map(compute_vars))
 
                 variable_coll = variable_coll.merge(input_coll)
@@ -628,6 +639,7 @@ class Collection():
             if ('et_reference_date_type' not in self.model_args.keys() or
                     self.model_args['et_reference_date_type'] is None or
                     self.model_args['et_reference_date_type'].lower() == 'daily'):
+                
                 daily_et_ref_coll = ee.ImageCollection(self.model_args['et_reference_source'])\
                     .filterDate(start_date, end_date)\
                     .select([self.model_args['et_reference_band']], ['et_reference'])

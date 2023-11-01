@@ -20,7 +20,7 @@ except ImportError:
     import model
     import utils
     from refetgee.hourly import Hourly
-    from refetgee.daily import Daily
+    from refetgee.daily import Daily, Calculate_ET0
 
 PROJECT_FOLDER = "projects/earthengine-legacy/assets/projects/usgs-ssebop"
 # PROJECT_FOLDER = 'projects/usgs-ssebop'
@@ -306,6 +306,7 @@ class Image:
         for v in variables:
             if v.lower() == "et":
                 output_images.append(self.et.float())
+                
             elif v.lower() == "et_fraction":
                 output_images.append(self.et_fraction.float())
             elif v.lower() == "et_reference":
@@ -324,6 +325,16 @@ class Image:
                 output_images.append(self.time)
             else:
                 raise ValueError("unsupported variable: {}".format(v))
+            
+        # reduced_image = ee.Image(output_images).set(self._properties)  
+        
+        # # get ndvi mean 
+        # ndvi_mean = self.ndvi.reduceRegion(
+        #     reducer=ee.Reducer.mean(),
+        #     geometry=self.image.geometry(),
+        #     scale=30,
+        #     maxPixels=1e13,
+        # ).get("ndvi").getInfo()
 
         return ee.Image(output_images).set(self._properties)
 
@@ -442,11 +453,20 @@ class Image:
                 or self.et_reference_date_type.lower() == "daily"
             ):
                 # Assume the collection is daily with valid system:time_start values
-                et_reference_coll = (
-                    ee.ImageCollection(self.et_reference_source)
-                    .filterDate(self._start_date, self._end_date)
-                    .select([self.et_reference_band])
+                gfs_et0 = Calculate_ET0(
+                    study_region=self.image.geometry(),
+                    start_date=self._start_date,
+                    end_date=self._end_date,
+                    # scale=self.scale,
+                    debug=False,
+                    model="NASA",
                 )
+                et_reference_coll = gfs_et0.calculate_eto_daily().select([self.et_reference_band])
+                # et_reference_coll = (
+                #     ee.ImageCollection(self.et_reference_source)
+                #     .filterDate(self._start_date, self._end_date)
+                #     .select([self.et_reference_band])
+                # )
             elif self.et_reference_date_type.lower() == "doy":
                 # Assume the image collection is a climatology with a "DOY" property
                 et_reference_coll = (
@@ -576,7 +596,7 @@ class Image:
     @lazy_property
     def dt(self):
         """
-
+       
         Returns
         -------
         ee.Image
@@ -1638,7 +1658,7 @@ class Image:
         lst = ee.Image(self.lst)
         ndvi = ee.Image(self.ndvi)
         tmax = ee.Image(self.tmax)
-        dt = ee.Image(self.dt)
+        dt = ee.Image(self.dt) 
         # TODO need lc mask for barren landcover
         lc = None
 

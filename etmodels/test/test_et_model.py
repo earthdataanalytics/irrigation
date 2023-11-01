@@ -6,6 +6,7 @@ import datetime
 import pandas as pd
 from PIL import Image as PILImage
 import requests
+import time
 
 # add the path to the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -13,11 +14,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../sseb
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), "../ssebop/refetgee"))
 )
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../utils")))
+
 
 from daily import Calculate_ET0
 from etmodels.test.time_controller import TimeController
 from collection import Collection
 from IPython.display import Image
+from batch import ee_export_image_collection_to_asset
 
 time_controller = TimeController()
 
@@ -28,6 +32,7 @@ class TestSsebop(unittest.TestCase):
 
     def setUp(self):
         ee.Initialize()
+        self.task_name = "test_europe"
         self.ndvi_palette = ["#EFE7E1", "#003300"]
         self.et_palette = [
             "DEC29B",
@@ -47,8 +52,8 @@ class TestSsebop(unittest.TestCase):
 
         self.image_size = 768
         self.landsat_cs = 30
-        self.start_date = "2023-09-01"
-        self.end_date = "2023-10-10"
+        self.start_date = "2023-04-10"
+        self.end_date = "2023-05-12"
 
         # self.et_reference_source = "projects/openet/reference_et/cimis/daily"
         # self.et_reference_band = "etr_asce"
@@ -69,9 +74,9 @@ class TestSsebop(unittest.TestCase):
         # Interpolation method - currently only LINEAR is supported
         self.interp_method = "LINEAR"
 
-        self.test_point = ee.Geometry.Point([-4.587895032393094, 37.87202372474622])
+        self.test_point = ee.Geometry.Point([-4.59, 37.86])
 
-        self.study_area = ee.Geometry.Polygon(
+        """ self.study_area = ee.Geometry.Polygon(
             [
                 [
                     [-9.139332431531301, 43.49479932356515],
@@ -82,14 +87,41 @@ class TestSsebop(unittest.TestCase):
             ],
             None,
             False,
+        ) """
+        # self.study_area = ee.Geometry.Polygon(
+        #     [
+        #         [
+        #             [-20.673055938396296, 59.8539499561377],
+        #   [-20.673055938396296, 32.488037505645565],
+        #   [41.905069061603704, 32.488037505645565],
+        #   [41.905069061603704, 59.8539499561377],
+        #         ]
+        #     ],
+        #     None,
+        #     False,
+        # )
+        # self.test_point = ee.Geometry.Point([-4.59, 37.86])
+
+        self.study_area = ee.Geometry.Polygon(
+            [
+                [
+                    [-4.59673559330618, 37.87785028383721],
+                    [-4.59673559330618, 37.86490927780263],
+                    [-4.579054471480008, 37.86490927780263],
+                    [-4.579054471480008, 37.87785028383721],
+                ]
+            ],
+            None,
+            False,
         )
+        
 
         self.study_region = self.study_area.bounds(1, "EPSG:4326")
         self.study_crs = "EPSG:32610"
 
     @time_controller.timeit
     def test_GFS_ET0_model(self):
-        return 
+        return
         self.setUp()
         gfs_et0 = GFS_ET0(
             study_region=self.study_region,
@@ -98,66 +130,127 @@ class TestSsebop(unittest.TestCase):
             scale=10,
             debug=False,
         )
-        
-        et0_collection = gfs_et0.calculate_eto_daily()
-        
-        def create_feature(image):
-            feature = ee.Feature(self.study_region, {
-                "datetime": ee.Date(image.get("system:time_start")).format("YYYY-MM-dd"),
-                "et0": ee.Number(image.select("et0").reduceRegion(
-                    ee.Reducer.mean(), self.study_region, scale=27830
-                ).get("et0")
-                )                
-            })
-            return feature
-            
-        et0_collection = et0_collection.map(create_feature).getInfo()
-        
 
-        #et0_collection.get("features")[i]["properties"] into a dataframe
+        et0_collection = gfs_et0.calculate_eto_daily()
+
+        def create_feature(image):
+            feature = ee.Feature(
+                self.study_region,
+                {
+                    "datetime": ee.Date(image.get("system:time_start")).format(
+                        "YYYY-MM-dd"
+                    ),
+                    "et0": ee.Number(
+                        image.select("et0")
+                        .reduceRegion(ee.Reducer.mean(), self.study_region, scale=27830)
+                        .get("et0")
+                    ),
+                },
+            )
+            return feature
+
+        et0_collection = et0_collection.map(create_feature).getInfo()
+
+        # et0_collection.get("features")[i]["properties"] into a dataframe
         et0_df = pd.DataFrame(et0_collection.get("features"))
         et0_df = pd.DataFrame(et0_df["properties"].to_list())
-        
+
         print(et0_df)
-        
-        
-      
-        
+
     @time_controller.timeit
     def test_ET_model(self):
         self.setUp()
 
         with ee.profilePrinting():
-
             gfs_et0 = Calculate_ET0(
                 study_region=self.study_region,
                 start_date=self.start_date,
                 end_date=self.end_date,
                 scale=10,
                 debug=False,
-                model="NASA"
+                model="NASA",
             )
             et0_collection = gfs_et0.calculate_eto_daily()
-            
-            def create_feature(image):
-                feature = ee.Feature(self.study_region, {
-                    "datetime": ee.Date(image.get("system:time_start")).format("YYYY-MM-dd"),
-                    "et0": ee.Number(image.select("et0").reduceRegion(
-                        ee.Reducer.mean(), self.study_region, scale=27830
-                    ).get("et0")
-                    )                
-                })
-                return feature
-                
-            et0_collection = et0_collection.map(create_feature).getInfo()
-            
 
-            #et0_collection.get("features")[i]["properties"] into a dataframe
-            et0_df = pd.DataFrame(et0_collection.get("features"))
+            def create_feature_polygone(image):
+                feature = ee.Feature(
+                    self.study_region,
+                    {
+                        "datetime": ee.Date(image.get("system:time_start")).format(
+                            "YYYY-MM-dd"
+                        ),
+                        "et0": ee.Number(
+                            image.select("et0")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.study_region, scale=27830
+                            )
+                            .get("et0")
+                        ),
+                    },
+                )
+                return feature
+            def create_feature_point(image):
+                feature = ee.Feature(
+                    self.study_region,
+                    {
+                        "datetime": ee.Date(image.get("system:time_start")).format(
+                            "YYYY-MM-dd"
+                        ),
+                        "et0": ee.Number(
+                            image.select("et0")
+                            .reduceRegion(
+                                ee.Reducer.mean(), self.test_point, scale=27830
+                            )
+                            .get("et0")
+                        ),
+                    },
+                )
+                return feature
+
+            # export collection to drive to use later in gee
+            # task = ee.batch.Export.image.toAsset(
+            #     image=et0_collection.first(),
+            #     description="et0_collection_2",
+            #     assetId="projects/gee-franciscopuig/assets/et0_collection_2",
+            #     region=self.study_region,
+            #     scale=et0_collection.first().projection().nominalScale().getInfo(),
+            #     crs=et0_collection.first().projection().crs().getInfo(),
+            #     maxPixels=1e13,
+            # )
+
+            # task.start()
+
+            # while task.status()["state"] == "RUNNING":
+            #     print(task.status())
+            #     time.sleep(5)
+
+            # if task.status()["state"] == "COMPLETED":
+            #     print("task completed")
+
+            # elif task.status()["state"] == "FAILED":
+            #     print(f"task failed: {task.status()['error_message']}")
+
+            et0_collection_info = et0_collection.map(create_feature_point).getInfo()
+
+            # et0_df = pd.DataFrame(et0_collection_info.get("features"))
+            # et0_df = pd.DataFrame(et0_df["properties"].to_list())
+            # list_of_names = [f"et0_{self.task_name}_{et0_df.iloc[i]['datetime']}" for i in range(len(et0_df))]
+            # list_of_asset = [f"projects/gee-franciscopuig/assets/{list_of_names[i]}" for i in range(len(et0_df))]
+            # ee_export_image_collection_to_asset(
+            #     ee_object=et0_collection,
+            #     descriptions=list_of_names,
+            #     assetIds=list_of_asset,
+            #     region=self.study_region,
+            #     scale=et0_collection.first().projection().nominalScale().getInfo(),
+            #     crs=et0_collection.first().projection().crs().getInfo(),
+            #     maxPixels=1e13,
+            #     # region=self.study_region,
+            # )
+
+            # et0_collection.get("features")[i]["properties"] into a dataframe
+            et0_df = pd.DataFrame(et0_collection_info.get("features"))
             et0_df = pd.DataFrame(et0_df["properties"].to_list())
-            
-            
-            
+
             print(et0_df)
 
 
