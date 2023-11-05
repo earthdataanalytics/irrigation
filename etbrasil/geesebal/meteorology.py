@@ -37,10 +37,10 @@ def verifyMeteoAvail(image):
     time_start = image.get('system:time_start')
     TIME_START_NUM=ee.Number(time_start)
     PREVIOUS_TIME=TIME_START_NUM.subtract(3*60*60*1000)
-    NEXT_TIME=TIME_START_NUM.add(3*60*60*1000)
+    # NEXT_TIME=TIME_START_NUM.add(3*60*60*1000)
 
     PREVIOUS_IMAGE=(DATASET.filter(ee.Filter.date(PREVIOUS_TIME,TIME_START_NUM))
-                          .limit(1, 'system:time_start', False))#.first())
+                          .limit(1, 'system:time_start', False)) #.first())
 
     return image.set('meteo_count', PREVIOUS_IMAGE.aggregate_count('system:time_start'))
 
@@ -66,38 +66,38 @@ def get_meteorology(image, scale=None):
     DELTA_TIME=(TIME_START_NUM.subtract(IMAGE_PREVIOUS_TIME)).divide(IMAGE_NEXT_TIME.subtract(IMAGE_PREVIOUS_TIME))
 
     #DAY OF THE YEAR
-    dateStr = ee.Date(time_start);
-    doy = dateStr.getRelative('day', 'year');
-    Pi=ee.Number(3.14);
+    dateStr = ee.Date(time_start)
+    doy = dateStr.getRelative('day', 'year')
+    Pi=ee.Number(3.14)
 
     #INVERSE RELATIVE DISTANCE EARTH-SUN
     #ALLEN ET AL.(1998)
-    d1 =  ee.Number(2).multiply(ee.Number(Pi)).divide(ee.Number(365));
-    d2 = d1.multiply(doy);
-    d3 = d2.cos();
-    dr = ee.Number(1).add(ee.Number(0.033).multiply(d3));
+    d1 =  ee.Number(2).multiply(ee.Number(Pi)).divide(ee.Number(365))
+    d2 = d1.multiply(doy)
+    d3 = d2.cos()
+    dr = ee.Number(1).add(ee.Number(0.033).multiply(d3))
 
     #SOLAR DECLINATION [RADIANS]
     #ASCE REPORT (2005)
-    e1 =  ee.Number(2).multiply(ee.Number(Pi)).multiply(doy);
-    e2 = e1.divide(ee.Number(365));
-    e3 = e2.subtract(ee.Number(1.39));
-    e4 = e3.sin();
-    solar_dec = ee.Number(0.409).multiply(e4);
+    e1 =  ee.Number(2).multiply(ee.Number(Pi)).multiply(doy)
+    e2 = e1.divide(ee.Number(365))
+    e3 = e2.subtract(ee.Number(1.39))
+    e4 = e3.sin()
+    solar_dec = ee.Number(0.409).multiply(e4)
 
     #GET COORDINATES
-    i_Rn24_coord =DATASET.first().addBands([ee.Image.pixelLonLat()]);
+    i_Rn24_coord =DATASET.first().addBands([ee.Image.pixelLonLat()])
 
     #SUNSET  HOUR ANGLE [RADIANS]
     #ASCE REPORT (2005)
-    i_lat_rad = (i_Rn24_coord.select('latitude').multiply(ee.Number(Pi))).divide(ee.Number(180));
+    i_lat_rad = (i_Rn24_coord.select('latitude').multiply(ee.Number(Pi))).divide(ee.Number(180))
     i_sun_hour = i_lat_rad.expression(
     'acos(- tan(lat)* tan(solar_dec))', {
           'lat' : i_lat_rad,
-          'solar_dec' : solar_dec}).rename('sun_hour');
+          'solar_dec' : solar_dec}).rename('sun_hour')
 
     #SOLAR CONSTANT
-    gsc = ee.Number(4.92); #[MJ M-2 H-1]
+    gsc = ee.Number(4.92) #[MJ M-2 H-1]
 
     #EXTRATERRESTRIAL RADIATION 24H  [MJ M-2 D-1]
     #ASCE REPORT (2005)
@@ -108,9 +108,9 @@ def get_meteorology(image, scale=None):
           'dr': dr,
           'omega': i_sun_hour,
           'solar_dec': solar_dec,
-          'lat_rad': i_lat_rad}).rename('Ra_24h');
+          'lat_rad': i_lat_rad}).rename('Ra_24h')
 
-    i_Ra_24h=i_Ra_24h.select('Ra_24h').reduce(ee.Reducer.mean());
+    i_Ra_24h=i_Ra_24h.select('Ra_24h').reduce(ee.Reducer.mean())
 
     #INCOMING SHORT-WAVE RADIATION DAILY EAN [W M-2]
     i_Rs_24h = ee.ImageCollection(Constants.WEATHER_COLLECTION)\
@@ -129,7 +129,7 @@ def get_meteorology(image, scale=None):
            'albedo' : i_albedo_ls,
            'i_Rs_24h' : i_Rs_24h,
            'Cs': ee.Number(110), #CONSTANT
-           'i_Ra_24h': i_Ra_24h}).rename('Rn24h_G');
+           'i_Ra_24h': i_Ra_24h}).rename('Rn24h_G')
 
     # AIR TEMPERATURE [K]
     tair_c = NEXT_IMAGE.select('temperature_2m')\
@@ -155,26 +155,21 @@ def get_meteorology(image, scale=None):
         'ux * (4.87) / log(67.8 * z - 5.42)', {'ux': wind_med, 'z': 10.0}).rename('ux_G')
 
     # PRESSURE [PA] CONVERTED TO KPA
-    tdp = NEXT_IMAGE.select('dewpoint_temperature_2m')\
-        .subtract(PREVIOUS_IMAGE.select('dewpoint_temperature_2m'))\
-        .multiply(DELTA_TIME).add(PREVIOUS_IMAGE.select('dewpoint_temperature_2m'))\
-        .rename('tdp')
+    # tdp = NEXT_IMAGE.select('dewpoint_temperature_2m')\
+    #     .subtract(PREVIOUS_IMAGE.select('dewpoint_temperature_2m'))\
+    #     .multiply(DELTA_TIME).add(PREVIOUS_IMAGE.select('dewpoint_temperature_2m'))\
+    #     .rename('tdp')
 
     # ACTUAL VAPOR PRESSURE [KPA]
     #PRESSURE [PA] CONVERTED TO KPA
-    i_P_med= NEXT_IMAGE.select('surface_pressure').subtract(PREVIOUS_IMAGE.select('surface_pressure')).multiply(DELTA_TIME).add(PREVIOUS_IMAGE.select('surface_pressure')).divide(ee.Number(1000));
+    i_P_med= NEXT_IMAGE.select('surface_pressure').subtract(PREVIOUS_IMAGE.select('surface_pressure')).multiply(DELTA_TIME).add(PREVIOUS_IMAGE.select('surface_pressure')).divide(ee.Number(1000))
 
     # SPECIFIC HUMIDITY [KG KG-1]
-    i_q_med =ee.ImageCollection(Constants.WEATHER_NASA_GLDAS_V021_NOAH_G025_T3H).select(['Qair_f_inst'],["specific_humidity"]).filterBounds(image.geometry()).filter(ee.Filter.date(ee.Date(time_start),ee.Date(time_start).advance(1,'day'))).first(); 
+    i_q_med =ee.ImageCollection(Constants.WEATHER_NASA_GLDAS_V021_NOAH_G025_T3H).select(['Qair_f_inst'],["specific_humidity"]).filterBounds(image.geometry()).filter(ee.Filter.date(ee.Date(time_start),ee.Date(time_start).advance(1,'day'))).first()
     ea = i_P_med.expression('(1/0.622)*Q*P',{
             'Q': i_q_med,
             'P':i_P_med}).rename('i_ea')
     
-    # TODO: This equation is not correct
-    # ea = tdp.expression(
-    #     '0.6108 * (exp((17.27 * T_air) / (T_air + 237.3)))',{
-    #     'T_air': tdp.subtract(273.15)})
-
     # SATURATED VAPOR PRESSURE [KPA]
     esat = tair_c.expression(
         '0.6108 * (exp((17.27 * T_air) / (T_air + 237.3)))', {'T_air': tair_c.subtract(273.15)})
@@ -191,20 +186,24 @@ def get_meteorology(image, scale=None):
 
     #CONCATENATES IMAGES
     crs = image.projection()
-    target_scale = scale if scale else crs.nominalScale()
+    # target_scale = scale if scale else crs.nominalScale()
     col_meteorology = ee.Image.cat(rn24h, tair_c, rh, wind_med, swdown24h)
-    col_meteorology = col_meteorology.reproject(crs, scale=target_scale)
+    
 
     out = image.addBands(col_meteorology)
 
     return out
 
+# NOTE: only change scale if you know what you're doing. 
+# Reducing the scale will increase the number of pixels in the image and the processing time
 def retrievePrecip(metadate, location, window_days=10, scale=None):
     startDate = ee.Date(metadate).advance(-window_days, 'day')
     endDate = ee.Date(metadate).advance(-1, 'day')
 
     collection = ee.ImageCollection(Constants.NOAA_CFSV2_6H)
-
+    
+    # print("Target scale = ", ee.Image(collection.first()).select('Precipitation_rate_surface_6_Hour_Average').projection().nominalScale().getInfo())
+    # print("Image id = ", ee.Image(collection.first()).select('Precipitation_rate_surface_6_Hour_Average').getInfo()['id'])
     # function to sum the values by day
     def sumPrecip(dayOffset, start_):
         start = start_.advance(dayOffset, 'days')
@@ -219,12 +218,13 @@ def retrievePrecip(metadate, location, window_days=10, scale=None):
         # convert from kg/m^2/s to mm/s over 6 hours
         precip_conversion_factor = ee.Number(6 * 60 * 60) # num hours in sample * num mins * num secs
 
-        target_scale = scale if scale else image.projection().nominalScale()
+        # target_scale = scale if scale else image.projection().nominalScale()
+        
 
         precip_value = image.select('Precipitation_rate_surface_6_Hour_Average').reduceRegion(
           reducer=ee.Reducer.first(),
           geometry=location.centroid(),
-          scale=ee.Number(target_scale)
+          scale=Constants.REDUCER_SCALE,
         ).get('Precipitation_rate_surface_6_Hour_Average')
         precip_value = ee.Number(precip_value)
 
@@ -294,17 +294,19 @@ def retrievePrecipImage(metadate, image, precip_window=10, cum_precip_window=3):
 
     # number of days since last rain
     last_rain = daily \
+                    .filterBounds(image.geometry().bounds()) \
                     .map(maskLowPrecip) \
                     .min() \
                     .rename('last_rain') \
-                    .clip(image.geometry().bounds())
+                    .filterBounds(image.geometry().bounds()) 
 
     # cumulative precipation of last 3 days (agreed in team meeting)
     cum_precip = daily \
+                    .filterBounds(image.geometry().bounds()) \
                     .limit(cum_precip_window, 'custom:index') \
                     .sum() \
                     .rename('sum_precip_priorX') \
-                    .clip(image.geometry().bounds())
+                    
 
     return last_rain, cum_precip
 

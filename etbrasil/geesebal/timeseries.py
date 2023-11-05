@@ -63,7 +63,7 @@ class TimeSeries():
                  Ts_hot=20,
                  calcRegionalET=False,
                  debug=False,
-                 scale=30
+                 scale=Constants.REDUCER_SCALE
         ):
 
         #output variable
@@ -157,7 +157,7 @@ class TimeSeries():
                 slope = ee.Terrain.slope(z_alt)
 
                 #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
-                image=fexp_spec_ind(image, scale=scale)
+                image=fexp_spec_ind(image)
                 
                 #LAND SURFACE TEMPERATURE
                 # TODO: IS THIS CORRECTION NECESSARY? Answer: No, because it uses the brightness temperature
@@ -204,32 +204,40 @@ class TimeSeries():
                     return var.reduceRegion(
                         reducer=ee.Reducer.first(),
                         geometry=self.coordinate,
-                        scale=scale,
-                        maxPixels=1e14)
+                        scale=Constants.REDUCER_SCALE,
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMinValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.min(),
                         geometry=self.coordinate,
-                        scale=scale,
-                        maxPixels=1e14)
+                        scale=Constants.REDUCER_SCALE,
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
+                def extractMinAndMaxValue(var):
+                    return var.reduceRegion(
+                        reducer=ee.Reducer.minMax(),
+                        geometry=self.coordinate,
+                        scale=Constants.REDUCER_SCALE,
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
 
                 def extractMaxValue(var):
                     return var.reduceRegion(
                         reducer=ee.Reducer.max(),
                         geometry=self.coordinate,
-                        scale=scale,
-                        maxPixels=1e14)
+                        scale=Constants.REDUCER_SCALE,
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
                 
                 ET_daily=image.select(['ET_24h'],[NAME_FINAL])
                 ET_point = extractValue(ET_daily)
 
                 if calcRegionalET:
-                    ET_min_daily=image.select(['ET_24h'],[NAME_FINAL])
-                    ET_min_point = extractMinValue(ET_min_daily)
-
-                    ET_max_daily=image.select(['ET_24h'],[NAME_FINAL])
-                    ET_max_point = extractMaxValue(ET_max_daily)
+                    
+                    ET = image.select(['ET_24h'],[NAME_FINAL])
+                    ET_MinMax_Daily = extractMinAndMaxValue(ET)
+                    ET_min_daily= ET_MinMax_Daily.get('ET_24h_min')
+                    ET_max_daily= ET_MinMax_Daily.get('ET_24h_max')
+                    
+                    
 
                 NDVI_daily=image.select(['NDVI'],[NAME_FINAL])
                 NDVI_point = extractValue(NDVI_daily)
@@ -273,7 +281,7 @@ class TimeSeries():
                 z_alt_point_get = ee.Number(z_alt_point.get(NAME_FINAL))
                 slope_point_get = ee.Number(slope_point.get(NAME_FINAL))
 
-                precip = retrievePrecip(date_string, self.coordinate, scale=scale)
+                precip = retrievePrecip(date_string, self.coordinate, scale=None)
 
                 etFeature = ee.Feature(self.coordinate.centroid(), {
                     'date': date_string,
@@ -299,30 +307,30 @@ class TimeSeries():
                 # - CONNECTION ISSUES.
                 # - SEBAL DOESN'T FIND A REASONABLE LINEAR RELATIONSHIP (dT).
                 raise Exception(sys.exc_info()[0])
-                etFeature = ee.Feature(self.coordinate.centroid(), {
-                    'date': date_string,
-                    'version': landsat_version,
-                    'status': 'failed',
-                    'ET_24h': None,
-                    'ET_R_min': None,
-                    'ET_R_max': None,
-                    'NDVI': None,
-                    'AirT_G': None,
-                    'LandT_G': None,
-                    'ux': None,
-                    'UR': None,
-                    'z_alt': None,
-                    'slope': None,
-                    'precip': None
-                })
+                # etFeature = ee.Feature(self.coordinate.centroid(), {
+                #     'date': date_string,
+                #     'version': landsat_version,
+                #     'status': 'failed',
+                #     'ET_24h': None,
+                #     'ET_R_min': None,
+                #     'ET_R_max': None,
+                #     'NDVI': None,
+                #     'AirT_G': None,
+                #     'LandT_G': None,
+                #     'ux': None,
+                #     'UR': None,
+                #     'z_alt': None,
+                #     'slope': None,
+                #     'precip': None
+                # })
 
             
             if(debug):
                 image_bands_max = image.reduceRegion(
                 reducer=ee.Reducer.max(),
                 geometry=self.coordinate,
-                scale=scale,
-                maxPixels=9e14
+                scale=Constants.REDUCER_SCALE,
+                maxPixels=Constants.REDUCER_MAX_PIXELS
                 )
                 
                 image_band_features = ee.Feature(None, {
@@ -336,14 +344,69 @@ class TimeSeries():
                 return ee.Feature(None, {'msg': etFeature, 'image': image_band_features})
             
             return etFeature
-           
         
-    
-        fc5 = (self.collection_l5.
-                    map(f_albedoL5L7)
+        if(debug):
+            def print_image_id(image):
+                image=ee.Image(image)
+                return image.get('system:index')
+            
+            try:
+                collention_l5 = (self.collection_l5.map(f_albedoL5L7)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                
+                
+                number_of_l5_images = collention_l5.size().getInfo()
+                
+                print("Number of L5 images = ", number_of_l5_images)
+            except:
+                number_of_l5_images = 0
+                print("No L5 images")
+            try:
+                collection_l7 = (self.collection_l7.map(f_albedoL5L7)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                
+                number_of_l7_images = collection_l7.size().getInfo()
+            
+            
+        
+                print("Number of L7 images = ", number_of_l7_images)
+            except:
+                number_of_l7_images = 0
+                print("No L7 images")
+                
+            try:
+            
+                collection_l8 = (self.collection_l8.map(f_albedoL8_9)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                number_of_l8_images = collection_l8.size().getInfo()
+                
+                print("Number of L8 images = ", number_of_l8_images)
+            except:
+                number_of_l8_images = 0
+                print("No L8 images")
+                
+            try:
+                collection_l9 = (self.collection_l9.map(f_albedoL8_9)
+                            .map(verifyMeteoAvail)
+                            .filter(ee.Filter.gt('meteo_count', 0)).map(print_image_id))
+                
+                number_of_l9_images = collection_l9.size().getInfo()
+                
+                print("Number of L9 images = ", number_of_l9_images)
+            
+            except:
+                number_of_l9_images = 0
+                print("No L9 images")
+                
+        fc5 = (self.collection_l5
+                    .map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
-                    .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .filter(ee.Filter.gt('meteo_count', 0)) 
+                    .map(lambda image: get_meteorology(image))
+                    # .aside(print)
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = fc5
@@ -352,7 +415,7 @@ class TimeSeries():
                     .map(f_albedoL5L7)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc7)
@@ -361,7 +424,7 @@ class TimeSeries():
                     .map(f_albedoL8_9)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc8)
@@ -370,7 +433,7 @@ class TimeSeries():
                     .map(f_albedoL8_9)
                     .map(verifyMeteoAvail)
                     .filter(ee.Filter.gt('meteo_count', 0))
-                    .map(lambda image: get_meteorology(image, scale=scale))
+                    .map(lambda image: get_meteorology(image))
                     .map(lambda image: retrieveETandMeteo(image, debug=debug))
         )
         self.ETandMeteo = self.ETandMeteo.merge(fc9)

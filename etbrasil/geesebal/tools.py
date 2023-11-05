@@ -26,7 +26,7 @@ from .constants import Constants
 
 
 # SPECTRAL INDICES MODULE
-def fexp_spec_ind(image, scale=30):
+def fexp_spec_ind(image):
     # NORMALIZED DIFFERENCE VEGETATION INDEX (NDVI)
     ndvi = image.normalizedDifference(["NIR", "R"]).rename("NDVI")
 
@@ -85,9 +85,10 @@ def fexp_spec_ind(image, scale=30):
     lst = image.select('T_LST')
     # RESCALED BRIGHTNESS TEMPERATURE
     # brt_r = image.select('BRT').divide(10).rename('BRT_R');
-    proj = image.select("B").projection()
-    latlon = ee.Image.pixelLonLat().reproject(proj, scale=scale)
-    coords = latlon.select(["longitude", "latitude"])
+    # proj = image.select("B").projection()
+    # latlon = ee.Image.pixelLonLat().reproject(proj, scale=scale)
+    # coords = latlon.select(["longitude", "latitude"])
+    coords = image.pixelLonLat()
 
     # FOR FUTHER USE
     pos_ndvi = ndvi.updateMask(ndvi.gt(0)).rename("pos_NDVI")
@@ -126,6 +127,8 @@ def fexp_lst_export(img_main, img_main_RAD, landsat_version, refpoly):
     # NCEP ATMOSPHERIC DATA
     bdate = ee.Date(img_main.get("system:time_start")).format("YYYY-MM-dd")
     edate = ee.Date(bdate).advance(1, "day")
+    
+    t
 
     # SURFACE WATER VAPOUR VARIABLE FROM NCEP
     # NOTE THAT EACH OBSERVATION DURING DAY
@@ -147,8 +150,8 @@ def fexp_lst_export(img_main, img_main_RAD, landsat_version, refpoly):
     d_wv_med = wv.reduceRegion(
         reducer=ee.Reducer.mean(),
         geometry=refpoly,
-        scale=25000,
-        maxPixels=9000000000000,
+        scale=Constants.REDUCER_SCALE,
+        maxPixels=Constants.REDUCER_MAX_PIXELS,
     )
     n_wv_med = ee.Number(d_wv_med.get("SRWVAP12"))
     wv = wv.unmask(-9999)
@@ -573,12 +576,12 @@ def fexp_sensible_heat_flux(
     # TS HOT PIXEL
     n_Ts_hot = ee.Number(d_hot_pixel.get("temp"))
     # G HOT PIXEL
-    n_G_hot = ee.Number(d_hot_pixel.get("G").getInfo())
+    n_G_hot = ee.Number(d_hot_pixel.get("G"))
     # RN HOT PIXEL
-    n_Rn_hot = ee.Number(d_hot_pixel.get("Rn").getInfo())
+    n_Rn_hot = ee.Number(d_hot_pixel.get("Rn"))
     # LAT AND LON HOT PIXEL
-    n_long_hot = ee.Number(d_hot_pixel.get("x").getInfo())
-    n_lat_hot = ee.Number(d_hot_pixel.get("y").getInfo())
+    n_long_hot = ee.Number(d_hot_pixel.get("x"))
+    n_lat_hot = ee.Number(d_hot_pixel.get("y"))
     # POINT GEOMETRY
     p_hot_pix = ee.Geometry.Point([n_long_hot, n_lat_hot])
 
@@ -661,8 +664,8 @@ def fexp_sensible_heat_flux(
         d_rah_hot = i_rah.reduceRegion(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
-            scale=scale,
-            maxPixels=9000000000,
+            scale=Constants.REDUCER_SCALE,
+            maxPixels=Constants.REDUCER_MAX_PIXELS,
         )
 
         n_rah_hot = ee.Number(d_rah_hot.get("rah"))
@@ -709,8 +712,8 @@ def fexp_sensible_heat_flux(
         d_H_int = i_H_int.reduceRegion(
             reducer=ee.Reducer.first(),
             geometry=p_hot_pix,
-            scale=scale,
-            maxPixels=9000000000,
+            scale=Constants.REDUCER_SCALE,
+            maxPixels=Constants.REDUCER_MAX_PIXELS,
         )
         n_H_int = ee.Number(d_H_int.get("H"))
 
@@ -966,7 +969,7 @@ def fexp_sensible_heat_flux_ver_server(
         # AERODYNAMIC RESISTANCE TO HEAT TRANSPORT IN HOT PIXEL
         # BCJ-can decrease maxpixels? what buffersize needed?
         d_rah_hot = i_rah.reduceRegion(
-            reducer=ee.Reducer.first(), geometry=p_hot_pix, scale=scale, maxPixels=5556
+            reducer=ee.Reducer.first(), geometry=p_hot_pix, scale=Constants.REDUCER_SCALE, maxPixels=5556
         )  # 5556 pixels * 900 sqm / pixel = 5e6 sqm = 5 sq km
         # maxPixels = 9000000000) # original
 

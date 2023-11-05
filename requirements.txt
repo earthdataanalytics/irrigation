@@ -1,12 +1,13 @@
 
-pandas 
-matplotlib
-seaborn
-scikit-learn
-earthengine-api
-geemap
-geopandas
-tqdm
-joblib
-PyCRS
-hdbscan
+pandas==2.1.0
+matplotlib==3.7.3
+seaborn==0.12.2
+scikit-learn==1.3.0
+earthengine-api==0.1.364
+geemap==0.26
+geopandas==0.13.2
+tqdm==4.66.1
+joblib==1.3.2
+PyCRS==1.0.2
+hdbscan==0.8.33
+pytest==7.4.2

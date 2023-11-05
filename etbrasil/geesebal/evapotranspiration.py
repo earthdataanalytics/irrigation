@@ -40,7 +40,7 @@ def fexp_et(image, Rn24hobs):
             'i_G': i_G,
             'i_H_fim':i_H_final }).rename('LE')
     #FILTER
-    i_lambda_E=i_lambda_ET.where(i_lambda_ET.lt(0),0)
+#     i_lambda_E=i_lambda_ET.where(i_lambda_ET.lt(0),0)
 
     #LATENT HEAT OF VAPORIZATION (LAMBDA) [J KG-1]
     #BISHT ET AL.(2005)

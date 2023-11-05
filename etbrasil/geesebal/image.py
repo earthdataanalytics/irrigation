@@ -29,13 +29,19 @@ import ee
 from .landsatcollection import fexp_landsat_5Coordinate, fexp_landsat_7Coordinate, fexp_landsat_8Coordinate, fexp_landsat_9Coordinate
 from .masks import (f_albedoL5L7,f_albedoL8_9)
 from .meteorology import get_meteorology, retrievePrecipImage, verifyMeteoAvail
-from .tools import (fexp_spec_ind, fexp_lst_export,fexp_radlong_up, LST_DEM_correction,
-fexp_radshort_down, fexp_radlong_down, fexp_radbalance, fexp_soil_heat, fexp_sensible_heat_flux,
+from .tools import (fexp_spec_ind, 
+                    # fexp_lst_export,
+                    fexp_radlong_up, LST_DEM_correction,
+fexp_radshort_down, 
+fexp_radlong_down, 
+fexp_radbalance,
+fexp_soil_heat, 
+# fexp_sensible_heat_flux,
 fexp_sensible_heat_flux_ver_server)
 from .endmembers import fexp_cold_pixel, fexp_hot_pixel
 from .evapotranspiration import fexp_et
 from .constants import Constants
-from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
+# from .landsat_utils import prepSrLandsat5and7, prepSrLandsat8and9
 #IMAGE FUNCTION
 class Image():
 
@@ -69,7 +75,7 @@ class Image():
         def retrieveETandMeteo(image):
             #GET INFORMATIONS FROM IMAGE
             image = ee.Image(image)
-            zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
+            # zenith_angle=image.get('SOLAR_ZENITH_ANGLE')
             sun_elevation = image.get("SUN_ELEVATION")
             time_start=image.get('system:time_start')
             _date=ee.Date(time_start)
@@ -101,10 +107,10 @@ class Image():
             #SRTM DATA ELEVATION
             srtm = ee.Image(Constants.SRTM_ELEVATION_COLLECTION).clip(geometryReducer)
             z_alt = srtm.select('elevation')
-            slope = ee.Terrain.slope(z_alt)
+            # slope = ee.Terrain.slope(z_alt)
 
             #SPECTRAL IMAGES (NDVI, EVI, SAVI, LAI, T_LST, e_0, e_NB, long, lat)
-            image=fexp_spec_ind(image, scale=scale)
+            image=fexp_spec_ind(image)
 
             #LAND SURFACE TEMPERATURE
             image=LST_DEM_correction(image, z_alt, T_air, UR,sun_elevation,_hour,_minuts)
@@ -136,7 +142,7 @@ class Image():
 
             #SENSIBLE HEAT FLUX (H) [W M-2]
             image=fexp_sensible_heat_flux_ver_server(image, ux, UR,Rn24hobs,n_Ts_cold,
-                                               d_hot_pixel, date_string,geometryReducer, scale=scale)
+                                               d_hot_pixel, date_string,geometryReducer, scale=Constants.REDUCER_SCALE)
 
             #DAILY EVAPOTRANSPIRATION (ET_24H) [MM DAY-1]
             image=fexp_et(image,Rn24hobs)
@@ -168,9 +174,9 @@ class Image():
                 image
                     .reduceRegion(
                         reducer=ee.Reducer.mean(),
-                        geometry=self.coordinate,
-                        scale=scale,
-                        maxPixels=1e14)
+                        geometry=self.coordinate, # TODO: Where is self.coordinate declared?
+                        scale=Constants.REDUCER_SCALE,
+                        maxPixels=Constants.REDUCER_MAX_PIXELS)
                     .select(cols)
             )
 
@@ -180,7 +186,7 @@ class Image():
                 .map(f_albedoL5L7)
                 .map(verifyMeteoAvail)
                 .filter(ee.Filter.gt('meteo_count', 0))
-                .map(lambda image: get_meteorology(image, scale=scale))
+                .map(lambda image: get_meteorology(image))
                 .map(retrieveETandMeteo)
         )
         self.ETandMeteo = ic5
@@ -190,7 +196,7 @@ class Image():
                 .map(f_albedoL5L7)
                 .map(verifyMeteoAvail)
                 .filter(ee.Filter.gt('meteo_count', 0))
-                .map(lambda image: get_meteorology(image, scale=scale))
+                .map(lambda image: get_meteorology(image))
                 .map(retrieveETandMeteo)
         )
         self.ETandMeteo = self.ETandMeteo.merge(ic7)
@@ -200,7 +206,7 @@ class Image():
                 .map(f_albedoL8_9)
                 .map(verifyMeteoAvail)
                 .filter(ee.Filter.gt('meteo_count', 0))
-                .map(lambda image: get_meteorology(image, scale=scale))
+                .map(lambda image: get_meteorology(image))
                 .map(retrieveETandMeteo)
         )
         self.ETandMeteo = self.ETandMeteo.merge(ic8)
@@ -210,7 +216,7 @@ class Image():
                 .map(f_albedoL8_9)
                 .map(verifyMeteoAvail)
                 .filter(ee.Filter.gt('meteo_count', 0))
-                .map(lambda image: get_meteorology(image, scale=scale))
+                .map(lambda image: get_meteorology(image))
                 .map(retrieveETandMeteo)
         )
         self.ETandMeteo = self.ETandMeteo.merge(ic9)

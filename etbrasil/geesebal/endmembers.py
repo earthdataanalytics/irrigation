@@ -18,6 +18,7 @@
 #PYTHON PACKAGES
 #Call EE
 import ee
+from .constants import Constants
 
 #A SIMPLIFIED VERSION OF
 #CALIBRATION USING INVERSE MODELING AT EXTREME CONDITIONS (CIMEC)
@@ -37,25 +38,25 @@ def fexp_cold_pixel(image, refpoly, p_top_NDVI, p_coldest_Ts):
   d_perc_top_NDVI=image.select('NDVI_neg').reduceRegion(
       reducer=ee.Reducer.percentile([p_top_NDVI]),
       geometry= refpoly,
-      scale= 30,
-      maxPixels=9e14)
+      scale= Constants.REDUCER_SCALE,
+      maxPixels=Constants.REDUCER_MAX_PIXELS)
 
   #GET VALUE
   n_perc_top_NDVI= ee.Number(d_perc_top_NDVI.get('NDVI_neg'))
 
   #UPDATE MASK WITH NDVI VALUES
-  i_top_NDVI=image.updateMask(image.select('NDVI_neg').lte(n_perc_top_NDVI));
+  i_top_NDVI=image.updateMask(image.select('NDVI_neg').lte(n_perc_top_NDVI))
 
   #SELECT THE COLDEST TS FROM PREVIOUS NDVI GROUP
   d_perc_low_LST = i_top_NDVI.select('LST_NW').reduceRegion(
     reducer= ee.Reducer.percentile([p_coldest_Ts]),
     geometry=refpoly,
-    scale= 30,
-    maxPixels=9e14
+    scale= Constants.REDUCER_SCALE,
+    maxPixels=Constants.REDUCER_MAX_PIXELS
     )
   #GET VALUE
   n_perc_low_LST = ee.Number(d_perc_low_LST.get('LST_NW'))
-  i_cold_lst = i_top_NDVI.updateMask(i_top_NDVI.select('LST_NW').lte(n_perc_low_LST));
+  i_cold_lst = i_top_NDVI.updateMask(i_top_NDVI.select('LST_NW').lte(n_perc_low_LST))
 
   #FILTERS
   c_lst_cold20 =  i_cold_lst.updateMask(image.select('LST_NW').gte(200))
@@ -66,13 +67,13 @@ def fexp_cold_pixel(image, refpoly, p_top_NDVI, p_coldest_Ts):
   count_final_cold_pix = c_lst_cold20.select('int').reduceRegion(
         reducer=  ee.Reducer.count(),
         geometry= refpoly,
-        scale= 30,
-        maxPixels=9e14)
+        scale= Constants.REDUCER_SCALE,
+        maxPixels=Constants.REDUCER_MAX_PIXELS)
   n_count_final_cold_pix = ee.Number(count_final_cold_pix.get('int'))
 
   #SELECT COLD PIXEL RANDOMLY (FROM PREVIOUS SELECTION)
   def function_def_pixel(f):
-      return f.setGeometry(ee.Geometry.Point([f.get('longitude'), f.get('latitude')]));
+      return f.setGeometry(ee.Geometry.Point([f.get('longitude'), f.get('latitude')]))
 
   fc_cold_pix = c_lst_cold20.stratifiedSample(1, "int", refpoly, 30).map(function_def_pixel)
   n_Ts_cold = ee.Number(fc_cold_pix.aggregate_first('LST_NW'))
@@ -98,23 +99,23 @@ def fexp_hot_pixel(image, refpoly, p_lowest_NDVI, p_hottest_Ts):
   d_perc_down_ndvi=image.select('pos_NDVI').reduceRegion(
       reducer=ee.Reducer.percentile([p_lowest_NDVI]),
       geometry= refpoly,
-      scale= 30,
-      maxPixels=9e14
-       );
+      scale= Constants.REDUCER_SCALE,
+      maxPixels=Constants.REDUCER_MAX_PIXELS
+       )
   #GET VALUE
   n_perc_low_NDVI= ee.Number(d_perc_down_ndvi.get('pos_NDVI'))
 
   #UPDATE MASK WITH NDVI VALUES
-  i_low_NDVI = image.updateMask(image.select('pos_NDVI').lte(n_perc_low_NDVI));
+  i_low_NDVI = image.updateMask(image.select('pos_NDVI').lte(n_perc_low_NDVI))
 
   #SELECT THE HOTTEST TS FROM PREVIOUS NDVI GROUP
   d_perc_top_lst = i_low_NDVI.select('LST_neg').reduceRegion(
     reducer= ee.Reducer.percentile([p_hottest_Ts]),
     geometry=refpoly,
-    scale= 30,
-    maxPixels=9e14
-    );
-
+    scale= Constants.REDUCER_SCALE,
+    maxPixels=Constants.REDUCER_MAX_PIXELS
+    )
+  
   #GET VALUE
   n_perc_top_lst = ee.Number(d_perc_top_lst.get('LST_neg'))
 
@@ -126,8 +127,8 @@ def fexp_hot_pixel(image, refpoly, p_lowest_NDVI, p_hottest_Ts):
   count_final_hot_pix = c_lst_hotpix_int.select('int').reduceRegion(
         reducer=  ee.Reducer.count(),
         geometry= refpoly,
-        scale= 30,
-        maxPixels=9e14)
+        scale= Constants.REDUCER_SCALE,
+        maxPixels=Constants.REDUCER_MAX_PIXELS)
   n_count_final_hot_pix = ee.Number(count_final_hot_pix.get('int'))
 
   #SELECT HOT PIXEL RANDOMLY (FROM PREVIOUS SELECTION)
@@ -135,7 +136,7 @@ def fexp_hot_pixel(image, refpoly, p_lowest_NDVI, p_hottest_Ts):
      return f.setGeometry(ee.Geometry.Point([f.get('longitude'), f.get('latitude')]))
 
   fc_hot_pix = c_lst_hotpix.stratifiedSample(1, "int", refpoly, 30).map(function_def_pixel)
-  n_Ts_hot = ee.Number(fc_hot_pix.aggregate_first('LST_NW'));
+  n_Ts_hot = ee.Number(fc_hot_pix.aggregate_first('LST_NW'))
   n_long_hot = ee.Number(fc_hot_pix.aggregate_first('longitude'))
   n_lat_hot = ee.Number(fc_hot_pix.aggregate_first('latitude'))
   n_ndvi_hot = ee.Number(fc_hot_pix.aggregate_first('NDVI'))
