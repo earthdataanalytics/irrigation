@@ -1,9 +1,23 @@
 import ee
 from tqdm import tqdm
-from datetime import datetime, timedelta
+import datetime
 
-from etbrasil.geesebal import TimeSeries
 from pipeline import cropmasks as msk
+
+from etbrasil.geesebal import TimeSeries as etgeesebal
+from etmodels.ssebop import TimeSeries as etssebop
+
+from enum import Enum
+
+
+class SupportedModels(Enum):
+    SEBAL: str = "SEBAL"
+    SSEBOP: str = "SSEBOP"
+
+models = {
+    "SEBAL": etgeesebal,
+    "SSEBOP": etssebop,
+}
 
 def exportETdata(etFC, lbl, loc, folder='irrigation'):
     #filename = ee.String('et_TS_')
@@ -28,7 +42,15 @@ def extractData(aoi, aoi_label,
                 buffer_range=50,
                 calc_ET_region=False,
                 scale=30,
+                ET_model: SupportedModels = SupportedModels.SEBAL,
     ):
+
+    if ET_model == SupportedModels.SSEBOP:
+        if calc_ET_region:
+            print('ET_region is not used for SSEBOP model, skipping this variation.')
+            return []
+
+    etmodel = models[ET_model.value]
 
     # buffer_range is in meters, max 7000 for GEE limits.
     # must be set tight around sample locations to limit zone from
@@ -65,7 +87,7 @@ def extractData(aoi, aoi_label,
             if calc_ET_region:
                 buffsize = 5000
 
-            sebalTS = TimeSeries(start_yr+yr_inc, start_mo, start_dy,
+            feature_TS = etmodel(start_yr+yr_inc, start_mo, start_dy,
                                         start_yr+yr_inc, end_mo, end_dy,
                                         max_cloud_cover, single_location,
                                         buffersize=buffsize,
@@ -73,25 +95,34 @@ def extractData(aoi, aoi_label,
                                         scale=scale
                                      )
 
-            sebalTS.ETandMeteo = sebalTS.ETandMeteo \
+            feature_TS.ETandMeteo = feature_TS.ETandMeteo \
                                     .map(lambda x: x.set('loc_type', loc_type))
 
-            exportETdata(etFC=sebalTS.ETandMeteo,
+            exportETdata(etFC=feature_TS.ETandMeteo,
                          lbl=aoi_label,
                          loc=str(idx)+'_'+str(start_yr+yr_inc))
-            out.append(sebalTS.ETandMeteo)
+            out.append(feature_TS.ETandMeteo)
             cnt+=1
 
     print('Number of tasks launched =', cnt)
     return out
 
-def extractMonthlyData(aoi, aoi_label,
+def extractMonthlyData(aoi, 
+                        aoi_label,
                         max_cloud_cover=30,
                         buffer_range=50,
                         calc_ET_region=False,
                         restart_index=-1,
-                        scale=30
+                        scale=30,
+                        ET_model: SupportedModels = SupportedModels.SEBAL,
                         ):
+
+    if ET_model == SupportedModels.SSEBOP:
+        if calc_ET_region:
+            print('ET_region is not used for SSEBOP model, skipping this variation.')
+            return []
+
+    etmodel = models[ET_model.value]
 
     # ======================
     #
@@ -135,19 +166,33 @@ def extractMonthlyData(aoi, aoi_label,
         sample_location = ee.Geometry(samples_buffered.get(idx))
         loc_type = sample.get('POINT_TYPE')
 
-        sample_date = ee.Date(sample.get('date'))
+        if ET_model == SupportedModels.SEBAL:
+            sample_date = ee.Date(sample.get('date'))
+            
+            start_date = sample_date.advance(-2, 'day')
+            start_yr = ee.Number.parse(start_date.format('YYYY'))
+            start_mo = ee.Number.parse(start_date.format('MM'))
+            start_dy = ee.Number.parse(start_date.format('dd'))
 
-        start_date = sample_date.advance(-2, 'day')
-        start_yr = ee.Number.parse(start_date.format('YYYY'))
-        start_mo = ee.Number.parse(start_date.format('MM'))
-        start_dy = ee.Number.parse(start_date.format('dd'))
+            end_date = sample_date.advance(2, 'day')
+            end_yr = ee.Number.parse(end_date.format('YYYY'))
+            end_mo = ee.Number.parse(end_date.format('MM'))
+            end_dy = ee.Number.parse(end_date.format('dd'))
 
-        end_date = sample_date.advance(2, 'day')
-        end_yr = ee.Number.parse(end_date.format('YYYY'))
-        end_mo = ee.Number.parse(end_date.format('MM'))
-        end_dy = ee.Number.parse(end_date.format('dd'))
+        else:
+            sample_date = datetime.datetime.strptime(sample.get('date').getInfo(), '%Y-%m-%d')
 
-        sebalTS = TimeSeries(start_yr, start_mo, start_dy,
+            start_date = sample_date - datetime.timedelta(days=2)
+            start_yr = start_date.year
+            start_mo = start_date.month
+            start_dy = start_date.day
+
+            end_date = sample_date + datetime.timedelta(days=2)
+            end_yr = end_date.year
+            end_mo = end_date.month
+            end_dy = end_date.day
+
+        feature_TS = etmodel(start_yr, start_mo, start_dy,
                                     end_yr, end_mo, end_dy,
                                     max_cloud_cover, sample_location,
                                     buffersize=buffsize,
@@ -155,11 +200,11 @@ def extractMonthlyData(aoi, aoi_label,
                                     scale=scale
                                  )
 
-        sebalTS.ETandMeteo = sebalTS.ETandMeteo \
+        feature_TS.ETandMeteo = feature_TS.ETandMeteo \
                                 .map(lambda x: x.set('loc_type', loc_type))
 
         export_task = exportETdata(
-                etFC=sebalTS.ETandMeteo,
+                etFC=feature_TS.ETandMeteo,
                 lbl=aoi_label,
                 loc=idx
             )

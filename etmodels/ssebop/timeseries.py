@@ -12,6 +12,7 @@ import sys
 import os
 import ee
 import pandas as pd
+import datetime
 
 # TODO: Moving to a better place
 ee.Initialize()
@@ -38,13 +39,17 @@ class TimeSeries:
         day_e,
         cloud_cover,
         coordinate,
+        buffersize=None, # for TS class compatibility
+        calcRegionalET=None, # for TS class compatibility
+        scale=None, # for TS class compatibility
         debug=False,
     ):
         ee.Initialize()
 
         self.landsat_cs = 30
-        self.start_date = f"{year_i}-{month_i}-{day_i}"
-        self.end_date = f"{year_e}-{month_e}-{day_e}"
+        
+        self.start_date = str(datetime.date(year_i, month_i, day_i))
+        self.end_date = str(datetime.date(year_e, month_e, day_e))
 
         self.collections = [
             "LANDSAT/LC09/C02/T1_L2",
