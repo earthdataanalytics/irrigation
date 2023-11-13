@@ -104,7 +104,8 @@ def fit(datafile=None,
 
     # ##### Retain data when no precipitation in prior X days
     out_stats['filter_rain'] = False
-    if filter_rain:
+    last_rain_present = df['last_rain'].sum() > 0
+    if filter_rain and last_rain_present:
         out_stats['filter_rain'] = True
         out_stats['num_rain_filtered_out_rf'] = int((df.last_rain > 3).sum())
         df = df[df.last_rain > 3] # threshold defined in team meeting on 22 Feb 2022
@@ -115,18 +116,29 @@ def fit(datafile=None,
     # ##### Setup columns to use
     et_var = 'ET_24h'
     if calcETregion:
-        et_var = 'ET_24h_R'
+        if 'ET_24h_R' in df.columns:
+            et_var = 'ET_24h_R'
+        else:
+            out_stats['message'] = 'ET_24h_R not found in data, therefore skipping this model variant.'
+            filename = path + 'summary_stats.json'
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(out_stats, f, ensure_ascii=False, indent=4)
+            return None
+
     out_stats['et_var'] = et_var
     out_stats['temporality'] = 'all_months'
 
-    cols = [et_var, 'NDVI', 'LandT_G', 'last_rain', 'sum_precip_priorX', 'mm', 'yyyy', 'loc_idx', 'date']
-    num_cols_rf = 5 # changed from 6 on 2022.08.02 to remove yyyy from predictors
+    generic_cols = [et_var, 'NDVI', 'LandT_G', 'sum_precip_priorX', 'last_rain', 'mm', 'yyyy', 'loc_idx', 'date']
+    cols = [x for x in generic_cols if x in df.columns]
+
+    num_cols_rf = 2 # changed from 5 to 2 on 2023.11.12 to test SSEBOP # changed from 6 on 2022.08.02 to remove yyyy from predictors
 
     use_gridsearchcv = False # flag added to code in July 2022.
                               # Disabled on 2022.08.02 because accuracy and f1 score not correctly output.
 
     # ##### Setup training/validation dataset
-    train_val_data = df.dropna(subset=cols)
+
+    train_val_data = df.dropna(subset=cols[:num_cols_rf])
     out_stats['num_samples_train_total'] = int(len(train_val_data))
 
     train_val_data.loc[train_val_data['type']=='Irrigated', 'type'] = 1

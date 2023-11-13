@@ -32,7 +32,8 @@ def setupOutputPaths(datafile, outpath):
 
 def baseETtransforms(df):
     # Convert LandT_G from Kelvin to Celsius
-    df.LandT_G = df.LandT_G - 273.15
+    # Commented out by BCJ on 2023.11.12 to avoid re-converting when loading training back data to GEE for GEE classifier training
+    # df.LandT_G = df.LandT_G - 273.15
 
     # Convert date column from string to datetime
     df['date'] = pd.to_datetime(df['date'])
@@ -40,7 +41,7 @@ def baseETtransforms(df):
     # Split .geo into latitude and longitude columns
     df['longitude'] = df['.geo'].apply(lambda x: json.loads(x)['coordinates'][0])
     df['latitude'] = df['.geo'].apply(lambda x: json.loads(x)['coordinates'][1])
-    df.drop(['.geo', 'system:band_names', 'system:bands', 'version'], axis=1, inplace=True)
+    df.drop(['.geo', 'system:index', 'system:band_names', 'system:bands', 'version', 'status'], errors='ignore', axis=1, inplace=True)
 
     # Convert types
     df.ET_24h = df.ET_24h.astype(float)

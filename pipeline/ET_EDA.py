@@ -144,9 +144,10 @@ def analyze(datafile=None,
     plt.savefig(path + 'etdaily.png')
 
     # land temperature
-    df.sample(frac=0.2).boxplot(column='LandT_G', by='loc_idx')
-    plt.suptitle('')
-    plt.savefig(path + 'landtemp.png')
+    if 'LandT_G' in df.columns:
+        df.sample(frac=0.2).boxplot(column='LandT_G', by='loc_idx')
+        plt.suptitle('')
+        plt.savefig(path + 'landtemp.png')
 
     if False:
         # wind speed

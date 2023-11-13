@@ -74,6 +74,8 @@ def generateFeatures(datafile=None,
         try:
             tmp = pd.read_csv(zf.open(file))
             df = pd.concat([df, tmp], ignore_index=True)
+        except pd.errors.EmptyDataError:
+            pass
         except:
             logging.error(f' in file {file.filename}')
 
@@ -98,8 +100,10 @@ def generateFeatures(datafile=None,
         out_stats['num_locations'] = int(len(df['loc_idx'].unique()))
         out_stats['num_ET_too_low'] = int(num_ET_err)
 
+
     # ## Feature Engineering
     df_features = df
+
 
     # ##### Add terrain-type label
     terrain_types = {
@@ -111,40 +115,51 @@ def generateFeatures(datafile=None,
         df_features.loc[df_features.loc_type.isin(terrain_types[key]), 'type'] = key
     df_features = df_features.dropna(subset=['type'])
 
+
     # Cumulative precipitation over prior X days
-    df_features['sum_precip_priorX'] = df_features.precip.apply(lambda x: sum([float(y) for y in x.strip('][').split(', ')][:3]))
+    df_features['sum_precip_priorX'] = df_features.precip.apply(lambda x: sum([float(y) for y in x.strip('][').split(', ')][:3]) if isinstance(x, str) else float(x))
 
 
     # ##### Number of days since last precipitation
     rain_threshold = 0.254 # 0.254 mm = 0.01 inches of rainfall in a day, source:  Paolo
     def findFirstPrecip(x):
-        # values of 10+ indicate that the date of last rain was outside the number of weather days available in the data
-        y1 = [float(y) for y in x.strip('][').split(', ')]
-        y2 = np.where(np.array(y1) > rain_threshold)[0][:1]
-        y3 = y2.item() if len(y2)>0 else 9
-        return y3 + 1
+        if isinstance(x, str):
+            # values of 10+ indicate that the date of last rain was outside the number of weather days available in the data
+            y1 = [float(y) for y in x.strip('][').split(', ')]
+            y2 = np.where(np.array(y1) > rain_threshold)[0][:1]
+            y3 = y2.item() if len(y2)>0 else 9
+            return y3 + 1
+        else:
+            return 0 # the precip variable did not contain multiple sample dates
 
     df_features['last_rain'] = df_features.precip.apply(findFirstPrecip)
+    last_rain_present = df_features['last_rain'].sum() > 0
+
 
     # ##### Remove low NDVI
     if filter_ndvi:
-        out_stats['num_ndvi_filtered_out'] = int((df_features.NDVI >= 0.2).sum())
+        out_stats['num_ndvi_filtered_out'] = int((df_features.NDVI < 0.2).sum())
         df_features = df_features[df_features.NDVI >= 0.2] # keep data points where NDVI > threshold
                                             # threshold discussed in team meetings on 22 & 25 Feb 2022
 
+
     # ##### Retain data when no precipitation in prior X days
-    if filter_rain:
+    if filter_rain and last_rain_present:
         out_stats['num_rain_filtered_out'] = int((df_features.last_rain > 3).sum())
         df_features = df_features[df_features.last_rain > 3] # threshold defined in team meeting on 22 Feb 2022
 
+
     # ##### Regionalized ET_24h score: ET_24h_R
-    df_features['ET_24h_R'] = (df_features['ET_24h'].subtract(df_features['ET_R_min'])) \
-                       .divide(
-                               df_features['ET_R_max'].subtract(df_features['ET_R_min']).replace(0,np.nan)
-                              )
+    if 'ET_R_min' in df_features.columns:
+        df_features['ET_24h_R'] = (df_features['ET_24h'].subtract(df_features['ET_R_min'])) \
+                           .divide(
+                                   df_features['ET_R_max'].subtract(df_features['ET_R_min']).replace(0,np.nan)
+                                  )
+
 
     # ## Save working dataframe for next step in pipeline
     df_features.to_pickle(path + 'features.pkl')
+
 
     # ## Save summary statistics
     for key in terrain_types.keys():
