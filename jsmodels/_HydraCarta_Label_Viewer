@@ -1,0 +1,353 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var geometry = 
+    /* color: #ffc82d */
+    /* shown: false */
+    /* displayProperties: [
+      {
+        "type": "rectangle"
+      },
+      {
+        "type": "rectangle"
+      }
+    ] */
+    ee.Geometry.MultiPolygon(
+        [[[[-119.47672493214873, 36.313517324561],
+           [-119.47672493214873, 36.247647884973254],
+           [-119.36274177785185, 36.247647884973254],
+           [-119.36274177785185, 36.313517324561]]],
+         [[[-119.8498336867918, 36.9657111906069],
+           [-119.8498336867918, 36.94088178558442],
+           [-119.81515808864727, 36.94088178558442],
+           [-119.81515808864727, 36.9657111906069]]]], null, false),
+    crop_decode = ee.FeatureCollection("projects/eda-bjonesneu-proto/assets/usda_nass_cropland_decode");
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+// Requires importing asset "usda_nass_cropland_decode" as var crop_decode
+//    This asset was manually created by BCJ for this application.  
+//    See asset description for more details.
+
+// Import sample data and convert to required format
+var label_files = ee.data.listAssets('projects/eda-bjonesneu-proto/assets/irrigation/labels')
+function convertToFeature(label_item) {
+    return ee.FeatureCollection(label_item['id'])
+}
+var label_features = ee.List(label_files['assets'].map(convertToFeature))
+var labels = ee.FeatureCollection(label_features).flatten()
+labels = labels.filter(ee.Filter.lt('date', '2021-01-01'))
+
+function setCoords(item) {
+    item = item.set('coordinates', item.geometry().coordinates())
+    return item
+}
+//print(labels.limit(10))
+function showAllData() {
+    var rain_labels = labels.filter(ee.Filter.eq('POINT_TYPE', 0))
+    Map.addLayer(rain_labels, {color: 'red'}, 'Rainfed', true, 1.0)
+    
+    var irr_labels = labels.filter(ee.Filter.eq('POINT_TYPE', 1))
+    Map.addLayer(irr_labels, {color: 'blue'}, 'Irrigated', true, 1.0)
+}
+showAllData()
+
+function addLabelsToMap() {
+    var rain_labels = labels.filter(ee.Filter.eq('POINT_TYPE', 0))
+                            .filter(ee.Filter.eq('YEAR', globalYear))
+                            .filter(ee.Filter.eq('MONTH', globalMonth))
+    Map.addLayer(rain_labels, {color: 'red'}, 'Rainfed', true, 1.0)
+    
+    var irr_labels = labels.filter(ee.Filter.eq('POINT_TYPE', 1))
+                            .filter(ee.Filter.eq('YEAR', globalYear))
+                            .filter(ee.Filter.eq('MONTH', globalMonth))
+    Map.addLayer(irr_labels, {color: 'blue'}, 'Irrigated', true, 1.0)
+}
+
+// Add a legend to the Map
+var type_rain = labels.filter(ee.Filter.eq('POINT_TYPE', 0)).size().getInfo()
+var type_irr = labels.filter(ee.Filter.eq('POINT_TYPE', 1)).size().getInfo()
+
+var legend = ui.Panel({style: {position: 'top-center'}})
+var lgnd_text = ui.Label('Total data points')
+
+var irr_text = ui.Label('Irrigated (1): '+type_irr, {color: 'blue'})
+var rain_text = ui.Label('Rain (0): '+type_rain, {color: 'red'})
+legend.add(lgnd_text)
+legend.add(irr_text)
+legend.add(rain_text)
+Map.add(legend)
+
+var globalMonth = null
+var globalYear = null
+
+function zoomOnMonth(month) {
+    Map.layers().reset()
+    globalMonth = month
+    if (globalYear) {
+      addLabelsToMap()
+    } else {
+      print('Select a year')
+    }
+}
+function zoomOnYear(year) {
+    Map.layers().reset()
+    globalYear = year
+    if (globalMonth) {
+      addLabelsToMap()
+    } else {
+      print('Select a month')
+    }
+}
+
+var leftpanel = ui.Panel()
+leftpanel.style().set({ position: 'top-left', width: '300px' })
+Map.add(leftpanel)
+var month_chart = ui.Chart.feature.histogram(labels, 'MONTH')
+                    .setOptions({ 
+                        title: 'Count of labels by Month',
+                        vAxis: { minValue: 0 } })
+month_chart.onClick(zoomOnMonth)
+leftpanel.add(month_chart)
+
+var rightpanel = ui.Panel()
+rightpanel.style().set({ position: 'top-right' })
+Map.add(rightpanel)
+
+var year_chart = ui.Chart.feature.histogram(labels, 'YEAR')
+                    .setOptions({ 
+                        title: 'Count of labels by Year',
+                        vAxis: { minValue: 0 } })
+year_chart.onClick(zoomOnYear)
+leftpanel.add(year_chart)
+
+function showPrecipNDVI(poi, selectedPoint, start) {
+    function retrievePrecip(start, location, window_days) {
+        var startDate = start.advance(-window_days, 'day')
+        var endDate = start.advance(-1, 'day')
+    
+        var collection = ee.ImageCollection("NOAA/CFSV2/FOR6H")
+    
+        function sumPrecip(dayOffset, start_) {
+            var start = start_.advance(dayOffset, 'days')
+            var end = start.advance(1, 'days')
+            return collection.select('Precipitation_rate_surface_6_Hour_Average')
+                          .filterDate(start, end)
+                          .sum()
+                          .set('system:time_start', start.millis())
+        }
+    
+        function extractPrecip(image) {
+            // convert from kg/m^2/s to mm/s over 6 hours
+            var precip_conversion_factor = ee.Number(6 * 60 * 60) // num hours in sample * num mins * num secs
+    
+            var precip_value = image.select('Precipitation_rate_surface_6_Hour_Average').reduceRegion(
+              ee.Reducer.first(),
+              location.centroid(),
+              ee.Number(image.projection().nominalScale())
+            ).get('Precipitation_rate_surface_6_Hour_Average')
+            precip_value = ee.Number(precip_value)
+    
+            return ee.Feature(null, {
+              'precip_value': precip_value.multiply(precip_conversion_factor),
+              'date': image.date().format('yyyy-MM-dd'),
+              'system:time_start': image.date().millis()
+            })
+        }
+    
+        // create a list of dates to use to extract precip values
+        var numberOfDays = endDate.difference(startDate, 'days')
+        var daily = ee.ImageCollection(
+                            ee.List.sequence(0, numberOfDays)
+                                .map(function(x) { return sumPrecip(x, startDate) })
+                        )
+    
+        // calculate the total precipitation for each of prior X days
+        var precip_ts = ee.FeatureCollection(daily.map(extractPrecip))
+                         .sort('date', false)
+    
+        return precip_ts.aggregate_array('precip_value')
+    }
+    
+    var txt_date = ui.Label('Sample date: ' + selectedPoint.get('date').getInfo())
+    rightpanel.add(txt_date)
+    
+    var crop_data = cropdataset.filterDate(start, start.advance(1, 'year'))
+                              .first()
+                              .reduceRegion(ee.Reducer.first(), poi, 30)
+    var crop_type = crop_data.get('cropland')
+    var crop_label = crop_decode.filter(ee.Filter.eq('Value', crop_type))
+                                .first().get('Description').getInfo()
+    var crop_conf = crop_data.get('confidence').getInfo()
+    var txt_crop = ui.Label('Crop type: ' + crop_label + 
+                            ' (' + crop_conf + '% conf.)')
+    rightpanel.add(txt_crop)
+
+    var precip_y = retrievePrecip(start, poi, 10)
+    var precip_x = ee.List.sequence(1, 10, 1)
+    
+    var rain_sum = precip_y.reduce(ee.Reducer.sum()).getInfo().toFixed(0)
+    var txt_rain = ui.Label('')
+    txt_rain.setValue('Total precipitation prior 10 days = ' + rain_sum + ' mm')
+    
+    var chart_rain = ui.Chart.array.values({array: precip_y, axis: 0, xLabels: precip_x})
+            .setChartType('ColumnChart')
+            .setOptions({
+                hAxis: {
+                  title: 'Days before displayed image',
+                  titleTextStyle: {italic: false, bold: true}
+                },
+                vAxis: {
+                  title: 'Daily precipation (mm)',
+                  titleTextStyle: {italic: false, bold: true},
+                  viewWindow: {min: '0', max: '10'},
+                  minValue: 0, 
+                },
+                legend: {position: 'none'},
+            })
+    rightpanel.add(txt_rain)
+    rightpanel.add(chart_rain)
+    
+    var chart_ndvi = ui.Chart.image
+                .doySeriesByYear({
+                  imageCollection: img_col,
+                  bandName: 'ndvi',
+                  region: poi,
+                  regionReducer: ee.Reducer.mean(),
+                  scale: 30,
+                  sameDayReducer: ee.Reducer.mean(),
+                })
+                .setOptions({
+                  hAxis: {
+                    title: 'Day of year',
+                    titleTextStyle: {italic: false, bold: true},
+                  },
+                  vAxis: {
+                    title: 'NDVI',
+                    titleTextStyle: {italic: false, bold: true},
+                    viewWindow: {min: '-0.1', max: '1'},
+                    minValue: -0.1, 
+                    maxValue: 1
+                  },
+                  lineWidth: 1,
+                })
+    rightpanel.add(chart_ndvi)
+}
+function showAOIInfo(arg) {
+    var poi = ee.Geometry.Point(arg['lon'], arg['lat'])
+    var selectedPoint = labels.filterBounds(poi.buffer(100)).first()
+    var start = ee.Date(selectedPoint.get('date'))
+
+    rightpanel.clear()
+    if (!(selectedPoint.getInfo())) {
+        var error_msg = ui.Label('Click closer to a sample location')
+        rightpanel.add(error_msg)
+        return
+    }
+
+    showPrecipNDVI(poi, selectedPoint, start)
+    
+    var aoi = calcBBox(poi)
+    showRGB(aoi, start)
+
+    aoi = calcBBox(poi, 0.03)
+    showCrops(aoi, start)
+}
+Map.onClick(showAOIInfo)
+
+var rgb_viz = {
+    bands: ['R', 'G', 'B'],
+    min: 0.0,
+    max: 0.3,
+}
+
+function maskClouds(img) {
+  var qa = img.select('QA_PIXEL')
+  var cloudBitMask = 1 << 3
+  var cirrusBitMask = 1 << 2
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+  if (img.id().index('LE07') < 0) {
+      mask = mask.and(qa.bitwiseAnd(cirrusBitMask).eq(0))
+  }
+  return img.updateMask(mask)
+}
+
+function applyScaleFactors(img) {
+  var opticalBands = img.select(['NIR', 'R', 'G', 'B']).multiply(0.0000275).add(-0.2)
+  return img.addBands(opticalBands, null, true)
+}
+
+function calcNDVI(img) {
+    var ndvi = img.normalizedDifference(['NIR', 'R']).rename('ndvi')
+    return img.addBands([ndvi])
+}
+
+function calcBBox(poi, size) {
+    var diff = 0.015
+    if (size != null) {
+        diff = size
+    }
+    var lonlat = poi.coordinates().getInfo()
+    var west = lonlat[0] - diff
+    var east = lonlat[0] + diff
+    var north = lonlat[1] - diff
+    var south = lonlat[1] + diff
+    return ee.Geometry.BBox(west, south, east, north)
+}
+
+function convertBands(img) {
+    var bands = ['SR_B5', 'SR_B4', 'SR_B3', 'SR_B2', 'QA_PIXEL']
+    if (img.id().index('LE07') > -1) {
+        bands = ['SR_B4', 'SR_B3', 'SR_B2', 'SR_B1', 'QA_PIXEL']
+    }
+    return img.select(bands)
+              .rename(['NIR', 'R', 'G', 'B', 'QA_PIXEL'])
+}
+var ic7 = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+    .map(convertBands)
+
+var ic8 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+    .map(convertBands)
+
+var ic9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+    .map(convertBands)
+
+var img_col_all = ic9.merge(ic8)//.merge(ic7)
+
+var img_col = img_col_all
+                    .filter(ee.Filter.lt('CLOUD_COVER', 30))
+                    .map(maskClouds)
+                    .map(calcNDVI)
+                    .map(applyScaleFactors)
+
+var rgbLayer = null
+function showRGB(aoi, start) {
+    if (rgbLayer) {
+        Map.remove(rgbLayer)
+    }
+    var end = start.advance(1, 'day')
+    var img = img_col.filterDate(start, end)
+                              .filterBounds(aoi)
+                              .mosaic()
+                              .clip(aoi)
+
+    rgbLayer = ui.Map.Layer(img, rgb_viz, 'RGB', true, 1.0)
+    Map.layers().insert(0, rgbLayer)
+    
+    //Map.centerObject(aoi, 13)
+}
+
+var cropdataset = ee.ImageCollection('USDA/NASS/CDL')
+var cropLayer = null
+function showCrops(aoi, start) {
+    if (cropLayer) {
+        Map.remove(cropLayer)
+    }
+    var end = start.advance(1, 'year')
+    var subcrops = cropdataset
+                  .filterDate(start, end)
+                  .filterBounds(aoi)
+                  .first()
+                  .clip(aoi)
+                  .select('cropland')
+
+    cropLayer = ui.Map.Layer(subcrops, {}, 'Crop Landcover')
+    Map.layers().insert(0, cropLayer)
+}
+

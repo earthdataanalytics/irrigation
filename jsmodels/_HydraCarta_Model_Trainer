@@ -1,0 +1,416 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var geometry = 
+    /* color: #d63000 */
+    /* shown: false */
+    ee.Geometry.Polygon(
+        [[[-119.90381323242188, 35.73443053875513],
+          [-119.38333593750001, 35.14367498531134],
+          [-118.52640234375001, 35.156026557338684],
+          [-118.91779028320313, 35.81019712712794]]]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var ssebop_collection_file = require('users/bjonesneu/earthdataanalytics/:ssebop_js/ssebop_collection');
+var ssebop_collection = ssebop_collection_file.make_ssebop_collection()
+
+
+// -=-=-=-=-=-=-=-=-=-= INPUT PARAMS -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+var debug = true // IF TRUE THE MODEL RETURNS ALL THE BANDS, IF FALSE ONLY ET FRACTION AND ETo
+var label_var = 'loc_type'
+var model_features = ['et', 'et_fraction', 'ndvi', 'last_precip', 'cum_precip', 'mm']
+//elev, slope, simplified lat/lon?
+
+
+// -=-=-=-=-=-=-=-=-=-=-=-= COLLECT SAMPLE LOCATIONS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+function getRawMonthlyLabeledData() {
+    function setCoords(item) {
+        // long is index 0 in coordinates list
+        // lat is index 1
+        return item.set('coordinates', item.geometry().coordinates())
+    }
+
+    var label_files = ee.data.listAssets('projects/eda-bjonesneu-proto/assets/irrigation/labels')
+
+    var label_features
+    for (var i=0; i < label_files['assets'].length; i++) {
+        var item = label_files['assets'][i]
+        var features = ee.FeatureCollection(item['id'])
+        if (label_features === undefined) {
+            label_features = features
+        } else {
+            label_features = label_features.merge(features)
+        }
+    }
+
+    return label_features.map(setCoords)
+}
+
+function generateMonthlySampleLocations(
+    aoi, 
+    num_samples, 
+    start_yr, 
+    end_yr, 
+    excludeNonCrop) {
+  
+    if (num_samples === undefined) {
+        num_samples = 10
+    }
+    
+    if (start_yr === undefined) {
+        start_yr = 2015
+    }
+
+    if (end_yr === undefined) {
+        end_yr = 2021
+    }
+
+    if (excludeNonCrop === undefined) {
+        excludeNonCrop = false
+    }
+
+    var sample_locations_tmp = getRawMonthlyLabeledData()
+
+    if (aoi !== undefined) {
+        sample_locations_tmp = sample_locations_tmp.filterBounds(aoi)
+    }
+
+/*    if (excludeNonCrop) {
+        mask = cropmasks.createGFSADmask(aoi)
+        sample_locations_tmp = mask.reduceRegions(sample_locations_tmp, ee.Reducer.first(), 30)
+                        .filter(ee.Filter.eq('first', 1))
+    }
+*/
+    
+    sample_locations_tmp = sample_locations_tmp
+                            .randomColumn('rando', 159)
+                            .sort('rando')
+
+    var sample_locations_irr = sample_locations_tmp
+                            .filter(ee.Filter.eq('POINT_TYPE', 1))
+                            .limit(num_samples)
+
+    var sample_locations_rain = sample_locations_tmp
+                            .filter(ee.Filter.eq('POINT_TYPE', 0))
+                            .limit(num_samples)
+
+    var sample_locations = sample_locations_irr.merge(sample_locations_rain)
+
+    return sample_locations
+}
+
+
+// -=-=-=-=-=-=-=-=-=-=-=-= CALCULATE SAMPLE DATA =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+function extractValue(img, geo, loc_type) {
+    var val_feature = ee.Feature(
+        geo,
+        img.reduceRegion({
+          "reducer": ee.Reducer.mean(),
+          "geometry": geo,
+          "scale": 30,
+          "maxPixels": 1e3
+          })
+        )
+        .set('loc_type', loc_type)
+
+    return val_feature
+}
+function generateSampleData(fc_locations) {
+    var max_points = 50000 // set arbitrarily high to capture all values
+    var buffsize = 50
+    
+    var locs_list = fc_locations.toList(max_points)
+    //print(locs_list)
+    
+    var samples_buffered = ee.FeatureCollection(locs_list)
+                            .geometry()
+                            .coordinates()
+                            .map(function (p) { return ee.Geometry.Point(p).buffer(buffsize) })
+
+    var cnt_samples = samples_buffered.size().getInfo()
+    //print('Number of samples to extract', cnt_samples)
+
+    var sample_data_fc
+    for (var idx=0; idx < cnt_samples; idx++) {
+        var sample = ee.Feature(locs_list.get(idx))
+        var sample_location = ee.Geometry(samples_buffered.get(idx))
+        var loc_type = sample.get('POINT_TYPE')
+
+        var sample_date = sample.get('date')
+        var start_dt = ee.Date(sample_date).advance(-2, 'days')
+        var end_dt = ee.Date(sample_date).advance(2, 'days')
+        //print(loc_type, sample_date, start_dt, end_dt)
+
+        var location_ic = ssebop_collection(sample_location, start_dt, end_dt, debug)
+            .select('et', 'et_fraction', 'ndvi', 'mm', 'last_precip', 'cum_precip')
+        
+        if ((location_ic !== undefined) && (location_ic.size().gt(ee.Number(0)))) {
+            var location_f = location_ic.map(function (img) {
+                                                return extractValue(img, sample_location, loc_type)
+                                              })
+
+            if (location_f !== undefined) {
+              if (sample_data_fc === undefined) {
+                  sample_data_fc = ee.FeatureCollection(location_f)
+              } else {
+                  sample_data_fc = sample_data_fc.merge(location_f)
+              }
+            }
+        }
+    }
+    
+    sample_data_fc = sample_data_fc.filter(
+      ee.Filter.notNull(sample_data_fc.first().propertyNames())
+    )
+
+    return sample_data_fc
+}
+
+function train_test_split(data_fc) {
+    var split = 0.8
+    var with_random = data_fc.randomColumn('random', 112358)
+    var train_partition = with_random.filter(ee.Filter.lt('random', split))
+    var test_partition = with_random.filter(ee.Filter.gte('random', split))
+    var out = {
+      'train': train_partition,
+      'test': test_partition,
+    }
+    return out
+}
+
+
+
+// -=-=-=-=-=-=-=-=-=-=-=-= TRAIN MODEL =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+function trainModel(train_data) {
+    var num_trees = 100
+    var bag_fraction = 0.63
+
+    classifier = ee.Classifier.smileRandomForest({
+        'numberOfTrees': num_trees, 
+        'bagFraction': bag_fraction, 
+        'seed': 314
+    })
+    classifier = classifier.train({
+        'features': train_data,
+        'classProperty': label_var,
+        'inputProperties': model_features,
+        'subsamplingSeed': 1123
+    })
+    return classifier
+}
+
+function scoreModel(model, test_data, show_metrics) {
+    var validated = test_data.classify(model)
+    var order = test_data.aggregate_array(label_var).distinct().sort()
+    var validation_matrix = validated.errorMatrix({
+      actual: label_var,
+      predicted: 'classification',
+      order: order
+    })
+    if (show_metrics) {
+        //print('Validation error matrix', validation_matrix)
+        print('Validation accuracy', validation_matrix.accuracy())
+        //print('Validation kappa', validation_matrix.kappa())
+    }
+    return validated
+}
+
+// -=-=-=-=-=-=-=-=-=-=-=-= SAVE MODEL =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+function encodeFeatureCollection(value) {
+    var string_ = ee.String.encodeJSON(value)
+    var stringLength = string_.length()
+    var maxLength = 100000
+    var maxProperties = 1000
+    
+    function slicer(start) {
+        start = ee.Number(start)
+        var end = start.add(maxLength).min(stringLength)
+        return string_.slice(start, end)
+    }
+
+    function convertToProperties(start) {
+        start = ee.Number(start)
+        var end = start.add(maxProperties).min(numberOfProperties)
+        var propertyValues = values.slice(start, end)
+        var propertyKeys = (
+            ee.List.sequence(1, propertyValues.size())
+                .map(function (i) { return ee.Number(i).format('%d') })
+        )
+        var properties = ee.Dictionary.fromLists(propertyKeys, propertyValues)
+        return ee.Feature(ee.Geometry.Point([0, 0]), properties)
+    }
+
+    var values = (
+        ee.List.sequence(0, stringLength, maxLength)
+            .map(slicer)
+            .filter(ee.Filter.neq('item', ''))
+    )
+
+    var numberOfProperties = values.size()
+    
+    return (
+        ee.FeatureCollection(ee.List.sequence(0, values.size(), maxProperties)
+            .map(convertToProperties)
+            .filter(ee.Filter.notNull(['1']))
+        )
+    )
+}
+
+function saveModel(model) {
+    var decisionTrees = ee.List(model.explain().get('trees'))
+    var collection = encodeFeatureCollection(decisionTrees)
+    var description = 'save_classifier'
+    var model_name = txt_model_name.getValue()
+
+    var assetId = 'projects/eda-bjonesneu-proto/assets/irrigation/'+model_name
+    
+    var task = Export.table.toAsset(collection, description, assetId)
+    print('Switch to the `Tasks` panel to launch the export job.')
+}
+
+
+
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//
+// -=-=-=-=-=-=-=-=-=-=-=-= END TO END PROCESS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+var classifier
+function buildModel(aoi, num_samples) {
+    var sample_locations = generateMonthlySampleLocations(aoi, num_samples)
+    //print('Locations', sample_locations)
+    
+    var sample_data_fc = generateSampleData(sample_locations)
+    //print('Samples', sample_data)
+    
+    var sample_train_test = train_test_split(sample_data_fc)
+    print('Number of train/test samples', sample_train_test['train'].size(), sample_train_test['test'].size())
+    classifier = trainModel(sample_train_test['train'])
+    //print('Model', classifier.explain())
+    
+    var val_data = scoreModel(classifier, sample_train_test['test'], true)
+
+    // -=-=-=-=-=-=-=-=-=-=-=-= DISPLAY RESULTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    var true_irr = sample_train_test['test'].filter(ee.Filter.eq('loc_type', 1))
+    var true_rain= sample_train_test['test'].filter(ee.Filter.eq('loc_type', 0))
+    Map.addLayer(true_irr.draw({color: 'blue', pointRadius: 3, strokeWidth: 3}), {}, 'true irrigated', false, 0.5)
+    Map.addLayer(true_rain.draw({color: 'red', pointRadius: 3, strokeWidth: 3}), {}, 'true rainfed', false, 0.5)
+    
+    var pred_irr = val_data.filter(ee.Filter.eq('classification', 1))
+    var pred_rain= val_data.filter(ee.Filter.eq('classification', 0))
+    Map.addLayer(pred_irr.draw({color: 'blue', pointRadius: 6, strokeWidth: 2}), {}, 'predict irrigated', false, 0.5)
+    Map.addLayer(pred_rain.draw({color: 'red', pointRadius: 6, strokeWidth: 2}), {}, 'predict rainfed', false, 0.5)
+    
+    var pred_correct = val_data.filter(ee.Filter.equals({leftField: 'loc_type', rightField: 'classification'}))
+    var pred_incorrect = val_data.filter(ee.Filter.notEquals({leftField: 'loc_type', rightField: 'classification'}))
+    Map.addLayer(pred_correct.draw({color: 'green', pointRadius: 9, strokeWidth: 2}), {}, 'correct predictions', false, 0.75)
+    Map.addLayer(pred_incorrect.draw({color: 'black', pointRadius: 9, strokeWidth: 2}), {}, 'incorrect predictions', false, 0.75)
+}
+
+
+
+// -=-=-=-=-=-=-=-=-=-=-=-= USER INTERFACE =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+function getTrainZone() {
+    var lay = Map.drawingTools().layers()
+    if (lay.length() < 1) { 
+        print('Select a region around training data on the map.')
+        return
+    }
+    var aoi = lay.get(0).toGeometry()
+    return aoi
+}
+    
+var bt_train_model = ui.Button({
+    label: 'Train Model',
+    onClick: function() {
+        var num_samples = parseInt(txt_num_samples.getValue())
+        var aoi = getTrainZone()
+        if (aoi !== undefined) {
+            buildModel(aoi, num_samples)
+            bt_save_model.setDisabled(false)
+        }
+    }
+})
+
+var bt_save_model = ui.Button({
+    label: 'Save Model',
+    onClick: function() {
+        if (classifier !== undefined) {
+            saveModel(classifier)
+        } else {
+            print('Train a model.')
+        }
+    },
+    disabled: true,
+})
+
+function showTrainingData() {
+    var labeled_samples = getRawMonthlyLabeledData()
+    var irr_ls = labeled_samples.filter(ee.Filter.eq('POINT_TYPE', 1))
+    var rain_ls = labeled_samples.filter(ee.Filter.eq('POINT_TYPE', 0))
+    Map.addLayer(irr_ls, { 'color': 'blue'}, 'irrigated', true, 0.5)
+    Map.addLayer(rain_ls, { 'color': 'red'}, 'rainfed', true, 0.5)
+}
+/*var chk_show_CA = ui.Checkbox({
+    label: 'CA',
+    value: false,
+    onChange: showTrainingData,
+    disabled: false,
+    style: {},
+})*/
+//var zone_panel = ui.Panel(null, ui.Panel.Layout.flow('horizontal'), {margin: 'auto'})
+//var txt_zones = ui.Label('Display training data for region')
+//zone_panel.add(chk_show_CA)
+showTrainingData()
+
+var bt_panel = ui.Panel(null, ui.Panel.Layout.flow('vertical'), {margin: 'auto'})
+bt_panel.add(bt_train_model)
+bt_panel.add(bt_save_model)
+
+var logo_panel = ui.Panel(null, ui.Panel.Layout.flow('vertical'), {margin: 'auto'})
+// instructions for creating a logo are found in _HydroLogo.js
+var logo = require('users/bjonesneu/earthdataanalytics:_HydroLogo.js')
+logo_panel.add(logo.thumb)
+
+
+var lbl_instruct = ui.Label('Select a region around the labeled training data to train a model.')
+var lbl_blank1 = ui.Label('')
+var lbl_blank2 = ui.Label('')
+var lbl_blank3 = ui.Label('')
+
+var num_sample_panel = ui.Panel(null, ui.Panel.Layout.flow('horizontal'), {margin: 'auto'})
+var lbl_num_samples = ui.Label('Number of training samples')
+var txt_num_samples = ui.Textbox('enter a value', 100)
+num_sample_panel.add(lbl_num_samples)
+num_sample_panel.add(txt_num_samples)
+
+var model_name_panel = ui.Panel(null, ui.Panel.Layout.flow('horizontal'), {margin: 'auto'})
+var lbl_model_name = ui.Label('Model name')
+//var now = new Date()
+//now = now.toJSON().slice(0, 10)
+var txt_model_name = ui.Textbox('enter a value', 'RF_model_latest')
+model_name_panel.add(lbl_model_name)
+model_name_panel.add(txt_model_name)
+
+var app_title = ui.Label('Model Trainer', {fontWeight: 'bold', fontSize: '20px', margin: '0 0 4px 0', padding: '5px 5px 5px 5px'});
+
+var main_panel = ui.Panel()
+if (true) { // removed for publishing app
+    main_panel.add(logo_panel)
+}
+main_panel.add(app_title)
+main_panel.add(lbl_instruct)
+//main_panel.add(txt_zones)
+//main_panel.add(zone_panel)
+main_panel.add(lbl_blank1)
+main_panel.add(num_sample_panel)
+main_panel.add(model_name_panel)
+main_panel.add(lbl_blank2)
+main_panel.add(bt_panel)
+main_panel.add(lbl_blank3)
+
+var left_panel = ui.Panel({layout: ui.Panel.Layout.absolute(), style: {width: '300px', height: '100%', position: 'middle-left'}})
+left_panel.add(main_panel)
+
+ui.root.insert(0, left_panel)
+
+Map.drawingTools().setDrawModes(['polygon', 'rectangle'])
+//Map.setOptions('HYBRID')
+Map.setCenter(-119.2515, 35.4821, 10)

@@ -1,0 +1,849 @@
+/*
+
+      IMPORTS AND SETUP
+
+*/
+// ET algorithm
+var ssebop_collection_file = require('users/bjonesneu/earthdataanalytics/:ssebop_js/ssebop_collection');
+var ssebop_collection = ssebop_collection_file.make_ssebop_collection()
+
+// Crop data
+var crop_decode = ee.FeatureCollection('projects/eda-bjonesneu-proto/assets/usda_nass_cropland_decode')
+var cropdataset = ee.ImageCollection('USDA/NASS/CDL')
+
+// Global variables and settings
+var model_features = ['et', 'et_fraction', 'ndvi', 'last_precip', 'cum_precip', 'mm']
+
+var class_col = undefined
+var cropLayer = undefined
+var debug = true // IF TRUE THE MODEL RETURNS ALL THE BANDS, IF FALSE ONLY A SUBSET
+
+var prob_viz = {'min': 0.0, 'max': 1.0, 'palette': ['red', 'magenta', 'pink', 'yellow', 'aqua', 'blue', 'darkblue']}
+var rgb_viz = {bands: ['blue', 'green', 'red'], min: 0.0, max: 0.3, gamma: 1.8}
+
+
+/*
+
+      BASE USER INTERFACE SETUP
+
+*/
+// Setup initial date values in UI
+var tmp_date = new Date()
+tmp_date.setDate(1)
+tmp_date.setDate(tmp_date.getDate()-1)
+//var end_date_yyyymmdd = tmp_date.toISOString().slice(0, 10) //
+var end_date_yyyymmdd = "2023-11-30" // for testing
+tmp_date.setMonth(tmp_date.getMonth() - 2)
+tmp_date.setDate(1)
+//var start_date_yyyymmdd = tmp_date.toISOString().slice(0, 10) // 
+var start_date_yyyymmdd = "2023-09-01" // for testing
+
+// ee date formats used for passing to GEE functions
+var start_date = undefined
+var end_date = undefined
+var start_end_date = undefined
+function set_start_end_date() {
+    start_date = ee.Date(start_date_yyyymmdd)
+    end_date = ee.Date(end_date_yyyymmdd)
+}
+set_start_end_date()
+
+// Initialize Map interface
+Map.drawingTools().setDrawModes(['polygon', 'rectangle'])
+Map.setOptions('ROADMAP')
+Map.setCenter(-121.76281, 38.53658, 13) // UC DAVIS
+
+var draw_layers = Map.drawingTools().layers()
+if (draw_layers.length() > 0) {
+    var tmp_dl = draw_layers.get(0)
+    draw_layers.reset()
+    draw_layers.add(tmp_dl)
+    draw_layers.get(0).setShown(true)
+}
+
+
+/*
+
+      APPLICATION LOGIC
+
+*/
+function decodeFeatureCollection(featureCollection) {
+    /* Converts an imported classifier model from a GEE Asset to an ee.Classifier 
+    */
+    return featureCollection
+        .map(function (feature) {
+            var dict = feature.toDictionary()
+            var keys = dict.keys()
+                .map(function (key) {
+                    return ee.Number.parse(ee.String(key))
+                })
+            var value = dict.values().sort(keys).join()
+            return ee.Feature(null, {value: value})
+        })
+        .aggregate_array('value')
+        .join()
+        .decodeJSON()
+}
+
+function runMap(aoi) {
+    /* Main logic to generate features on the Map:
+        - monthly irrigation probability view layers
+        - corresponding monthly irrigation view layers (mosaics)
+        - crop type probability layers
+        - hide the geometry to display underlying layers more clearly
+    */
+    msg_lbl.setValue('Processing...')
+    
+    var model_feature_ic = ssebop_collection(aoi, start_date, end_date, debug)
+    //print("model_feature_ic = ", model_feature_ic)
+    
+    ee.Number(0).evaluate(function(ignore) {
+        model_feature_ic.size().evaluate(function(cnt) {
+            if (cnt < 1) {
+                msg_lbl.setValue('No images returned')
+                ctrl_panel.style().set('height', '0')
+            } else {
+                ctrl_panel.style().set('height', 'auto')
+            }
+        })
+    
+        var class_col = inferIrrigation(model_feature_ic, aoi)
+        
+        var infer_layer = maplayers.get(0)
+        infer_layer.setOpacity(1.0)
+        infer_layer.setShown(true)
+        
+        var rgb_layer = maplayers.get(1)
+        rgb_layer.setOpacity(1.0)
+        rgb_layer.setShown(true)
+        
+        var lbl_year_mo = maplayers.get(0).getName().split('-')
+        txt_year_mo.setValue(lbl_year_mo[1] + '-' + lbl_year_mo[2])
+        
+        draw_layers.get(0).setShown(false) // hide geometry to show irrigation inference results
+        
+        showCrops(aoi)
+        setDownloadURL(class_col)
+        
+        msg_lbl.setValue('')
+    })
+}
+
+function inferIrrigation(col, aoi) {
+    /* Iterates through collection to classify irrigation for each period and display on map.
+        - Loads model from previously saved asset (created from python notebook or _HydraCarta_Model_Trainer)
+        - Iterates month-by-month to create inference and rgb layers to add to map
+    */
+    var model_name = model_name_txt.getValue()
+    var treeCollection = ee.FeatureCollection('projects/eda-bjonesneu-proto/assets/irrigation/'+model_name)
+    var decisionTrees = decodeFeatureCollection(treeCollection)
+    var classifier = ee.Classifier.decisionTreeEnsemble(decisionTrees)
+
+    var class_col = col
+          .map(function(img) { 
+                var x = img.select(model_features).classify(classifier)
+                x = x.set('system:time_start', img.date())
+                x = x.addBands(img.select(['blue', 'green', 'red']))
+                return x
+          })
+          
+    var final_end_date = new Date(end_date_yyyymmdd)
+    var start = new Date(start_date_yyyymmdd)
+    var end = new Date(start)
+    while (end < final_end_date) {
+        start.setDate(1)
+        end = new Date(start)
+        end.setMonth(end.getMonth()+1)
+        
+        inferMonthlyIrrigation(class_col.filterDate(start, end), start, end, aoi, classifier)
+
+        start.setMonth(start.getMonth()+1)
+    }
+    return class_col
+}
+
+function inferMonthlyIrrigation(col, period_start, period_end, aoi, classifier) {
+    /* Calculates displays irrigation probability and RGB image for same period:
+          - Classifies irrigation probability for each image in input collection
+          - Calculates mean probability over specified period
+          - Adds irrigation layer to map for specified period
+          - Adds mosaic RGB layer to map for specified period
+    */
+    var disp_date = period_start.toISOString().slice(0, 10)
+    msg_lbl.setValue('Processing '+disp_date+'...')
+
+    var num_images = col.size().getInfo()
+    if (num_images < 2) {
+        return
+    }
+    // create a map which takes the mean over all predictions in the time window
+    // to represent the probability of the pixel being irrigated or not during the window
+    var pred_prob = (
+        col.select(['classification'])
+            .mean() // over the time period specified
+            .clip(aoi)
+            .set('custom:num_input_images', num_images)
+            .set('system:time_start', ee.Date(period_start.getTime()))
+    )
+
+    var rgb_img = col.select(['blue', 'green', 'red']).mosaic() // should maybe be .first() instead?
+    Map.addLayer(rgb_img, rgb_viz, 'RGB-'+disp_date, false, 1.0)
+
+    Map.addLayer(pred_prob, prob_viz, 'IRR-'+disp_date, false, 1.0)
+}
+
+function showCrops(aoi) {
+    /* Displays crop classification for the current irrigation layer period shown.
+          - Forces maximum date of 2022-01-01 due to limitation on NASS data timeframe
+    */
+    var crop_year = txt_year_mo.getValue()
+    var start = ee.Date(crop_year+'-01')
+    if (crop_year > '2021-12-31') { // NASS data only goes up to 2022-01-01
+      start = ee.Date('2021-07-01')
+    }
+    var crop_data = cropdataset.filterDate(start, start.advance(1, 'year'))
+                              .first()
+                              .reduceRegion({
+                                  reducer: ee.Reducer.first(),
+                                  geometry: aoi,
+                                  scale: 30,
+                                  maxPixels: 1e13,
+                                  bestEffort: true
+                              })
+    var crop_type = crop_data.get('cropland')
+    var crop_label = crop_decode.filter(ee.Filter.eq('Value', crop_type))
+                                .first().get('Description').getInfo()
+    var crop_conf = crop_data.get('confidence').getInfo()
+    txt_crop.setValue('Crop type: ' + crop_label + 
+                            ' (' + crop_conf + '% conf.)')
+
+    if (cropLayer !== undefined) {
+        Map.remove(cropLayer)
+    }
+    var end = start.advance(1, 'year')
+    var subcrops = cropdataset
+                  .filterDate(start, end)
+                  .filterBounds(aoi)
+                  .first()
+                  .clip(aoi)
+                  .select('cropland')
+
+    cropLayer = ui.Map.Layer(subcrops, {}, 'Crop Landcover')
+    Map.layers().insert(999, cropLayer) // 999 = insert on top of all others
+    cropLayer.setShown(false)
+    crop_layer_on.setValue(false)
+}
+
+function formatDate(img) {
+    // Define a function to format an image timestamp as a JavaScript Date string
+    var date = ee.String(img.date().format('YYYY, MM, dd'))
+    return ee.String('Date(').cat(date).cat(ee.String(')'))
+}
+
+function build_class_col(roi) {
+    /* This method is needed to account for a difference in the way that published
+        apps manage dates in production vs development where dates are formatted differently.
+    */
+    var model_feature_ic = ssebop_collection(aoi, start_date, end_date, debug).filterBounds(roi)
+    
+    var model_name = model_name_txt.getValue()
+    var treeCollection = ee.FeatureCollection('projects/eda-bjonesneu-proto/assets/irrigation/'+model_name)
+    var decisionTrees = decodeFeatureCollection(treeCollection)
+    var classifier = ee.Classifier.decisionTreeEnsemble(decisionTrees)
+
+    var class_col = 
+          model_feature_ic
+              .select(model_features)
+              .map(function(img) { 
+                    var x = img.classify(classifier)
+                    x = x.set('system:time_start', img.date())
+                    return x
+              })
+    return class_col
+
+}
+
+var global_poi_layer = null;
+function genIrrProbTimeseries(roi, latlon) {
+    /* Creates timeseries chart of irrigation probabilities for the specified roi
+    */
+    irrts_panel.clear()
+    var ts_label = ui.Label("Preparing chart...")
+    irrts_panel.add(ts_label)
+    
+    var model_feature_ic = ssebop_collection(roi, start_date, end_date, debug).filterBounds(roi)
+
+    var model_name = model_name_txt.getValue()
+    var treeCollection = ee.FeatureCollection('projects/eda-bjonesneu-proto/assets/irrigation/'+model_name)
+    var decisionTrees = decodeFeatureCollection(treeCollection)
+    var classifier = ee.Classifier.decisionTreeEnsemble(decisionTrees)
+
+    var class_col = 
+          model_feature_ic
+              .select(model_features)
+              .map(function(img) { 
+                    var x = img.classify(classifier)
+                    x = x.set('system:time_start', img.date())
+                    return x
+              })
+
+    var tmp_str_start = start_date_yyyymmdd.split('-').join(', ')
+    var tmp_str_end = end_date_yyyymmdd.split('-').join(', ')
+    var chart = ui.Chart.image.series(class_col, roi, ee.Reducer.mean(), 30)
+                    .setOptions({
+                      title: 'Rainfed (0) vs Irrigation (1)',
+                      hAxis: {
+                          title: 'Time Period', titleTextStyle: {italic: false, bold: true},
+                          //viewWindow: {min: 'Date('+tmp_str_start+')', max: 'Date('+tmp_str_end+')'},
+                      },
+                      vAxis: {
+                          title: 'Irrigation Likelihood',
+                          titleTextStyle: {italic: false, bold: true},
+                          minValue: 0, maxValue: 1,
+                      },
+                      lineWidth: 3,
+                      colors: ['e37d05'],
+                    })
+    ts_label.setValue('')
+    irrts_panel.add(chart)
+
+    Map.layers().remove(global_poi_layer)
+    global_poi_layer = ui.Map.Layer(roi, { color: 'lightgreen' }, 'BBox', true, 1.0)
+    Map.layers().push(global_poi_layer)
+}
+
+function genIrrAreaTimeseriesSeq(roi, callback) {
+    /* Creates and displays timeseries chart of irrigation area within specified roi.
+          - this chart shows a sequential year-by-year timeseries when 
+            multi-year data is available in input collection
+          - callback is invoked to generate a second chart
+    */
+    var ts_label = ui.Label("Preparing charts...")
+    area_panel.add(ts_label)
+
+    var model_feature_ic = ssebop_collection(roi, start_date, end_date, debug).filterBounds(roi)
+
+    var model_name = model_name_txt.getValue()
+    var treeCollection = ee.FeatureCollection('projects/eda-bjonesneu-proto/assets/irrigation/'+model_name)
+    var decisionTrees = decodeFeatureCollection(treeCollection)
+    var classifier = ee.Classifier.decisionTreeEnsemble(decisionTrees)
+
+    var area_col = 
+          model_feature_ic
+              .select(model_features)
+              .map(function(img) { 
+                    var x1 = img.classify(classifier)
+                    var x2 = x1.select(['classification']) 
+                        .multiply(ee.Image.pixelArea()) // multiply area by irrigation probability
+                        .multiply(ee.Image(0.0001)) // convert sq m to hectare
+                        .rename('irr_area')
+                        .set('system:time_start', img.date())
+                        .addBands(x1.select(['classification']))
+                    return x2
+              })
+
+    var total_area = roi.area({'maxError': 1})
+                        .multiply(0.0001) // converted to hectare
+                        .format('%.2f')
+                        .getInfo()
+  
+    var tmp_str_start = start_date_yyyymmdd.split('-').join(', ')
+    var tmp_str_end = end_date_yyyymmdd.split('-').join(', ')
+    var chart = ui.Chart.image.series(area_col.select(['irr_area']), roi, ee.Reducer.sum(), 30)
+                    .setSeriesNames(['irr_area'])
+                    .setOptions({
+                      title: 'Irrigated Area',
+                      hAxis: {
+                          title: 'Time Period', titleTextStyle: {italic: false, bold: true},
+                      },
+                      vAxis: {
+                          title: 'Area (ha)',
+                          titleTextStyle: {italic: false, bold: true},
+                          minValue: 0, maxValue: (parseFloat(total_area) * 1.1),
+                      },
+                      lineWidth: 3,
+                      colors: ['e37d05'],
+                    })
+                    
+        ts_label.setValue("Total selected area = "+total_area+' ha')
+        area_panel.add(chart)
+        
+        setDownloadURLArea(roi, area_col)
+        
+        //callback(roi, area_col)
+}
+
+function setDownloadURLArea(roi, col) {
+    /* Creates a link to download the data.
+    */
+    var exp_fc = ee.FeatureCollection(
+            col.map(function(x) {
+                    return x.addBands(ee.Image.pixelLonLat())
+                            .select(['latitude', 'longitude', 'irr_area', 'classification'])
+                            .sample({region: roi,
+                                      scale: 30, 
+                                      numPixels: 5000, 
+                                      geometries: false})
+            }).flatten()
+    )
+
+    var exp_name = 'area_'+start_date_yyyymmdd + '_' + end_date_yyyymmdd
+    var dl_url = exp_fc.getDownloadURL({filename: exp_name})
+    var dl_area_label = ui.Label("Download area data (.csv)")
+    dl_area_label.setUrl(dl_url)
+    dl_area_label.style().set({color: 'blue'})
+    area_panel.add(dl_area_label)
+}
+
+function genIrrAreaTimeseriesYoY(roi, area_col) {
+    /* Creates and displays timeseries chart of irrigation area within specified roi.
+          - this chart shows overlapping periods year-by-year when 
+            multi-year data is available in input collection
+    */
+    /*var ts_col = area_col.map(function (in_img) {
+                              return in_img.multiply(ee.Image.pixelArea())
+                                          .multiply(ee.Image(0.0001)) // convert sq m to hectare
+                                          .copyProperties(in_img, in_img.propertyNames())
+                          })*/
+
+    var chart = ui.Chart.image
+                .doySeriesByYear({
+                  imageCollection: area_col,//ts_col,
+                  bandName: 'irr_area',//'classification',
+                  region: roi,
+                  regionReducer: ee.Reducer.sum(),
+                  scale: 30,
+                  sameDayReducer: ee.Reducer.sum(),
+                  //startDay: 150,
+                  //endDay: 215
+                })
+                .setOptions({
+                  title: 'Weighted Irrigated Area',
+                  hAxis: {
+                    title: 'Month',
+                    titleTextStyle: {italic: false, bold: true},
+                    //viewWindow: {min: '145', max: '215'}
+                  },
+                  vAxis: {
+                    title: 'Land Area (ha)',
+                    titleTextStyle: {italic: false, bold: true}
+                  },
+                  lineWidth: 5,
+                  colors: ['red', 'blue', 'green', 'orange', 'purple', 'black', 'grey'],
+                })
+      area_panel.add(chart)
+}
+
+function calcIrrArea(img, roi) {
+    /* Calculates the sum total of irrigated area within the specified roi
+    */
+    var out = img.multiply(ee.Image.pixelArea())
+    var stats = out.reduceRegion({
+      reducer: ee.Reducer.sum(),
+      geometry: roi,
+      scale: 30,
+      maxPixels: 1e13
+    })
+    out = out.set('custom:irrigated_area', stats.get(stats.keys().get(0)))
+    out = out.copyProperties(img, img.propertyNames())
+    return out
+}
+
+function sumIrrArea() {
+    /* Drives the creation of 2 charts to display irrigated area.
+    */
+    rightnav_panel.style().set('width', '300px')
+
+    var last_idx = draw_layers.length() - 1
+    var roi = draw_layers.get(last_idx).toGeometry()
+    area_panel.clear()
+    genIrrAreaTimeseriesSeq(roi, genIrrAreaTimeseriesYoY) // pass in the second function as a callback
+    Map.drawingTools().stop()
+
+    // keep in case we are going to export this    
+    //var tmp = class_col.map(function (img) { return calcIrrArea(img, aoi) }) // unclear where this is used???
+}
+
+function setDownloadURL(class_col) {
+    /* Creates a link to download the data.
+    */
+    var roi = draw_layers.get(0).toGeometry()
+    
+    var exp_fc = ee.FeatureCollection(
+            class_col.map(function(x) {
+                    return x.addBands(ee.Image.pixelLonLat())
+                            .select(['latitude', 'longitude', 'classification'])
+                            .sample({region: roi,
+                                      scale: 30, 
+                                      numPixels: 5000, 
+                                      geometries: false})
+            }).flatten()
+    )
+
+    var exp_name = 'likelihood_' + start_date_yyyymmdd + '_' + end_date_yyyymmdd
+    var dl_url = exp_fc.getDownloadURL({filename: exp_name})
+    urlLabel.setUrl(dl_url)
+    urlLabel.style().set({color: 'blue'})
+}
+
+
+/*
+
+      USER INTERFACE COMPONENTS
+      
+          - LEFTNAV
+              * APP (main inputs to UI)
+              * CTRL (controls navigation)
+              * LEGEND
+          - RIGHTNAV
+              * CHARTS
+          - MSG
+
+*/
+
+//
+//  MESSAGE PANEL
+//
+var msg_panel = ui.Panel({
+    layout: ui.Panel.Layout.flow('vertical'), 
+    style: { width: '400px', margin: 'auto', position: 'bottom-center' },
+})
+var msg_lbl = ui.Label('System messages appear here', {fontSize: '10px', color: 'blue'})
+msg_panel.add(msg_lbl)
+Map.add(msg_panel)
+
+
+//
+//  LEFTNAV PANEL
+//    - HEADER
+//    - INPUT
+//    - CTRL
+//    - LEGEND
+//
+var leftnav_panel = ui.Panel({
+    layout: ui.Panel.Layout.absolute(),
+    style: { width: '300px', height: '100%', position: 'middle-left' },
+})
+ui.root.insert(0, leftnav_panel)
+
+var app_panel = ui.Panel({layout: ui.Panel.Layout.flow('vertical')})
+
+// HEADER PANEL
+var logo_panel = ui.Panel(null, ui.Panel.Layout.flow('vertical'), {margin: 'auto'})
+// instructions for creating a logo are found in _HydroLogo.js
+var logo = require('users/bjonesneu/earthdataanalytics:_HydroLogo.js')
+logo_panel.add(logo.thumb)
+
+if (false) { // remove from published app due to redundancy with App Logo
+  app_panel.add(logo_panel)
+}
+var app_title = ui.Label('Irrigation Analyzer', {fontWeight: 'bold', fontSize: '20px', margin: '0 0 4px 0', padding: '5px 5px 5px 5px'});
+app_panel.add(app_title)
+
+
+// main interaction panel
+var panel = ui.Panel({layout: ui.Panel.Layout.flow('vertical')})
+
+// INPUT PANEL
+//    input dates
+function validate_dates() {
+    if (start_date_yyyymmdd > end_date_yyyymmdd) {
+        msg_lbl.setValue('Start Date must be less than End Date')
+        return false
+    }
+    if ((parseInt(end_date_yyyymmdd.split('-')[1]) - parseInt(start_date_yyyymmdd.split('-')[1])) > 6) {
+        msg_lbl.setValue('Maximum window is 6 months')
+        return false
+    }
+    msg_lbl.setValue('')
+    return true
+}
+
+var date_panel = ui.Panel({ layout: ui.Panel.Layout.flow('horizontal')})
+
+var start_panel = ui.Panel({ layout: ui.Panel.Layout.flow('vertical')})
+var start_label = ui.Label('Start Date')
+var start_date_str = ui.Textbox({
+  value: start_date_yyyymmdd,
+  placeholder: 'YYYY-MM-DD',
+  onChange: function(text) {
+    start_date_yyyymmdd = text
+    if (validate_dates()) {
+        set_start_end_date()
+    }
+  },
+  style: {maxWidth: '100px'}
+})
+start_panel.add(start_label)
+start_panel.add(start_date_str)
+date_panel.add(start_panel)
+
+var end_panel = ui.Panel({ layout: ui.Panel.Layout.flow('vertical')})
+var end_label = ui.Label('End Date')
+var end_date_str = ui.Textbox({
+  value: end_date_yyyymmdd,
+  placeholder: 'YYYY-MM-DD',
+  onChange: function(text) {
+    end_date_yyyymmdd = text
+    if (validate_dates()) {
+        set_start_end_date()
+    }
+  },
+  style: {maxWidth: '100px'}
+})
+end_panel.add(end_label)
+end_panel.add(end_date_str)
+date_panel.add(end_panel)
+
+panel.add(date_panel)
+
+//    model name
+var model_name_panel = ui.Panel(null, ui.Panel.Layout.flow('horizontal'))
+var model_name_lbl = ui.Label('Model Name')
+var model_name_txt = ui.Textbox({
+    value: 'RF_model_latest',
+    placeholder: 'enter model name',})
+model_name_panel.add(model_name_lbl)
+model_name_panel.add(model_name_txt)
+panel.add(model_name_panel)
+
+
+var map_button_panel = ui.Panel(null, ui.Panel.Layout.flow('horizontal'))
+var gen_map_btn = ui.Button({
+  label: 'Generate Maps',
+  onClick: function() {
+      if (!validate_dates()) {
+          return
+      }
+      var aoi = draw_layers.get(0).toGeometry()
+      if (aoi.area({maxError: 1e2}) > 420000000) {
+          msg_lbl.setValue('Area is too large')
+          return
+      }
+      msg_lbl.setValue('')
+      Map.layers().reset()
+      rightnav_panel.style().set('width', '0px')
+      Map.drawingTools().unlisten()
+      
+      runMap(aoi)
+      
+      Map.drawingTools().onDraw(sumIrrArea)
+      Map.onClick(clickOnMap)
+  }
+})
+var save_aoi_btn = ui.Button({
+  label: 'Save AOI',
+  onClick: function() {
+      geometry = draw_layers.get(0).toGeometry()
+  }
+})
+var clear_tools_btn = ui.Button({
+  label: 'Reset Tools',
+  onClick: function() {
+      draw_layers.reset()
+  }
+})
+map_button_panel.add(gen_map_btn)
+//map_button_panel.add(save_aoi_btn)
+map_button_panel.add(clear_tools_btn)
+panel.add(map_button_panel)
+function check_aoi(){
+  if (draw_layers.length() > 0) {
+      gen_map_btn.setDisabled(false)
+      save_aoi_btn.setDisabled(false)
+      clear_tools_btn.setDisabled(false)
+  } else {
+      gen_map_btn.setDisabled(true)
+      save_aoi_btn.setDisabled(true)
+      clear_tools_btn.setDisabled(true)
+  }
+}
+Map.drawingTools().onLayerRemove(check_aoi)
+Map.drawingTools().onLayerAdd(check_aoi)
+check_aoi()
+
+// CTRL PANEL: displays label for current layer shown on Map and controls for switching between layers
+var maplayers = Map.layers()
+var prev_layer = 0
+
+//      current layer name
+var pnl_year = ui.Panel()
+pnl_year.setLayout(ui.Panel.Layout.flow('horizontal'))
+var lbl_year_mo = ui.Label('Year-month displayed:')
+var txt_year_mo = ui.Label('')
+pnl_year.add(lbl_year_mo)
+pnl_year.add(txt_year_mo)
+
+var urlLabel = ui.Label('Download likelihood data (.csv)')//, { fontWeight: 'bold' })
+
+//      prev-next navigation feature
+function show_next_layer(next_layer) {
+    if (maplayers.length() < 1) {
+       return
+    }
+    maplayers.get(prev_layer).setOpacity(0)
+    maplayers.get(prev_layer).setShown(false)
+    maplayers.get(prev_layer+1).setOpacity(0)
+    maplayers.get(prev_layer+1).setShown(false)
+
+    if (maplayers.get(next_layer)) {
+        maplayers.get(next_layer).setOpacity(1)
+        maplayers.get(next_layer).setShown(true)
+        maplayers.get(next_layer+1).setOpacity(1.0)
+        maplayers.get(next_layer+1).setShown(true)
+
+        var lbl_year_mo = maplayers.get(next_layer).getName().split('-')
+        txt_year_mo.setValue(lbl_year_mo[1] + '-' + lbl_year_mo[2])
+
+        prev_layer = next_layer
+    } else {
+        prev_layer= prev_layer
+    }
+    showCrops(draw_layers.get(0).toGeometry())
+    cb_class_on.setValue(true)
+}
+
+var bt_prev = ui.Button({
+    label: '<< Prev',
+    onClick: function() {
+        if (prev_layer > 1) {
+          show_next_layer(prev_layer-2)
+        }   
+    },
+})
+var bt_next = ui.Button({
+    label: 'Next >>',
+    onClick: function() {
+        if (prev_layer < maplayers.length()-3) { // accounts for crop-layer
+          show_next_layer(prev_layer+2)
+        }   
+    },
+})
+var bt_panel = ui.Panel(null,ui.Panel.Layout.flow('horizontal'), {margin: 'auto'})
+bt_panel.add(bt_prev)
+bt_panel.add(bt_next)
+
+//    Enables toggling on/off the irrigation map in order to see the corresponding RGB image underneath
+var cb_class_on = ui.Checkbox({
+    label: 'View/hide irrigation map',
+    value: true,
+    onChange: function(state) {
+        maplayers.get(prev_layer+1).setShown(state)
+    }
+})
+//    Enables toggling on/off the corresponding crop type map
+var crop_layer_on = ui.Checkbox({
+    label: 'View/hide crop classification',
+    value: false,
+    onChange: function(state) {
+        cropLayer.setShown(state)
+    }
+})
+
+//    Instructions for user to interact with map
+var ts_label = ui.Label("> Click on map to view probability chart for location", { fontWeight: 'bold' })
+var area_label = ui.Label('> Select an area to view irrigated area chart', { fontWeight: 'bold' })
+
+function calcBBox(poi, diff) {
+    if (diff === undefined) {
+        diff = 0.01
+    }
+    var lonlat = poi.coordinates().getInfo()
+    var west = lonlat[0] - diff
+    var east = lonlat[0] + diff
+    var north = lonlat[1] - diff
+    var south = lonlat[1] + diff
+    return ee.Geometry.BBox(west, south, east, north)
+}
+
+function clickOnMap(args) {
+    var latlon = [args['lat'].toFixed(3), args['lon'].toFixed(3)]
+    var poi = ee.Geometry.Point(args['lon'], args['lat'])
+    //poi = calcBBox(poi, 0.0005)
+    genIrrProbTimeseries(poi, latlon)
+    rightnav_panel.style().set('width', '300px')
+}
+
+//    control panel
+var ctrl_panel = ui.Panel()
+ctrl_panel.style().set({ width: '300px', height: '0px', border: '1px solid grey'})
+ctrl_panel.add(pnl_year)
+ctrl_panel.add(bt_panel)
+ctrl_panel.add(urlLabel)
+ctrl_panel.add(cb_class_on)
+ctrl_panel.add(crop_layer_on)
+ctrl_panel.add(ts_label)
+ctrl_panel.add(area_label)
+panel.add(ctrl_panel)
+
+app_panel.add(panel)
+app_panel.style().set('border', '1px solid gray')
+leftnav_panel.add(app_panel)
+
+// LEGEND PANEL
+var legend_panel = ui.Panel({style: {position: 'bottom-center'}})
+
+var lgnd_title = ui.Label('Legend', {fontWeight: 'bold', fontSize: '12px', margin: 'auto', padding: '5px 5px 5px 5px'});
+legend_panel.add(lgnd_title)
+var class_viz = {bands: ['b1'], min: 0.0, max: 1.0, palette: ['red', 'magenta', 'pink', 'yellow', 'aqua', 'blue', 'darkblue']}
+function addLegend(colors) {
+    var color_panel = ui.Panel(null, ui.Panel.Layout.flow('horizontal'), {margin: 'auto'})
+    for (var idx in colors) {
+        var color_box = ui.Label('', {
+                  backgroundColor: colors[idx],
+                  padding: '8px',
+                  margin: '2px'
+                })
+        color_panel.add(color_box)
+    }
+    legend_panel.add(color_panel)
+
+    var label_panel = ui.Panel(null,ui.Panel.Layout.flow('horizontal'))
+    var irr_txt = ui.Label('Irrigated', {fontSize: '10px', padding: '0 0 0 60px'})
+    var rain_txt = ui.Label('Rainfed', {fontSize: '10px', padding: '0 0 0 3px'})
+    label_panel.add(rain_txt)
+    label_panel.add(irr_txt)
+    legend_panel.add(label_panel)
+}
+addLegend(class_viz.palette)
+leftnav_panel.add(legend_panel)
+
+
+//
+//
+//  RIGHT NAV PANEL
+//      - CROP TYPE
+//      - CHARTS
+//
+//
+
+//  CROP TYPE
+var rightnav_panel = ui.Panel({
+      layout: ui.Panel.Layout.flow('vertical'),
+      style: { width: '0px', height: '80%', position: 'bottom-right' },
+    })
+Map.add(rightnav_panel)
+
+var txt_crop = ui.Label()
+rightnav_panel.add(txt_crop)
+
+
+//  CHARTS
+var chart_panel = ui.Panel({style: {height: 'auto'}})
+rightnav_panel.add(chart_panel)
+
+var irrts_panel = ui.Panel()
+chart_panel.add(irrts_panel)
+
+var area_panel = ui.Panel()
+chart_panel.add(area_panel)
+
+
+
+
+/* for testing
+var aoi = draw_layers.get(0).toGeometry()
+runMap(aoi)
+Map.drawingTools().onDraw(sumIrrArea)
+Map.onClick(clickOnMap)
+*/

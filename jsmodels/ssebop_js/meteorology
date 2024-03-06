@@ -1,0 +1,165 @@
+function retrieve_precipitation_last_days(reference_day, location, window_days) {
+    /*
+    Retrieve precipitation for the last X days
+
+    Parameters:
+        :param reference_day: ee.Date 'YYYY-MM-dd'
+
+        :param location: ee.Geometry.Point
+            
+        :param window_days: int
+
+        :param scale: int
+    
+    Returns:
+        ee.FeatureCollection with precipitation values for the last X days
+    
+    */
+    if (window_days === undefined) {
+        window_days = 10
+    }
+
+    var startDate = ee.Date(reference_day).advance(-window_days, 'day')
+    var endDate = ee.Date(reference_day).advance(-1, 'day')
+
+    var collection = ee.ImageCollection("NOAA/CFSV2/FOR6H")
+    var collection_scale = collection.first().projection().nominalScale()
+
+    function sumPrecip(dayOffset, start_) {
+        var _start = start_.advance(dayOffset, 'days')
+        var _end = _start.advance(1, 'days')
+        return collection.select('Precipitation_rate_surface_6_Hour_Average')
+            .filterDate(_start, _end)
+            .sum()
+            .set('system:time_start', _start.millis())
+    }
+
+    function extractPrecip(image) {
+        // convert from kg/m^2/s to mm/s over 6 hours
+        var precip_conversion_factor = ee.Number(6 * 60 * 60) // num hours in sample * num mins * num secs
+
+        var precip_value = image.select('Precipitation_rate_surface_6_Hour_Average').reduceRegion(
+            ee.Reducer.first(),
+            location.centroid({'maxError': 1}),
+            collection_scale
+        ).get('Precipitation_rate_surface_6_Hour_Average')
+
+        precip_value = ee.Number(precip_value)
+
+        var precipitation_feature = ee.Feature(null, {
+            'precip_value': precip_value.multiply(precip_conversion_factor),
+            'system:index': image.date().format('yyyy-MM-dd'),
+            'system:time_start': image.date().millis()
+        })
+
+        return precipitation_feature
+    }
+
+
+    // create a list of dates to use to extract precip values
+    var numberOfDays = endDate.difference(startDate, 'days')
+    var daily = ee.ImageCollection(
+        ee.List.sequence(0, numberOfDays)
+            .map(function (x) {
+                return sumPrecip(x, startDate)
+            }
+            )
+    )
+
+    // calculate the total precipitation for each of prior X days
+    // extract as features
+    var precip_ts = ee.FeatureCollection(daily.map(extractPrecip))
+        .sort('date',  false)
+
+    precip_ts = precip_ts.aggregate_array('precip_value')
+
+
+    return precip_ts
+}
+
+exports.make_meteorology = function () {
+    return {
+        "retrieve_precipitation_last_days": retrieve_precipitation_last_days,
+    }
+}
+
+
+function retrievePrecipImage(metadate, image, precip_window, cum_precip_window) {
+    if (precip_window === undefined) {
+        precip_window = 10
+    }
+    if (cum_precip_window === undefined) {
+        cum_precip_window = 3
+    }
+
+    var startDate = ee.Date(metadate).advance(-precip_window, 'day')
+    var endDate = ee.Date(metadate).advance(-1, 'day')
+
+    var collection = ee.ImageCollection("NOAA/CFSV2/FOR6H")
+                    .filterBounds(image.geometry().bounds({'maxError': 1}))
+
+    // function to sum the values by day
+    function sumPrecip(dayOffset, start_) {
+        var precip_conversion_factor = ee.Image(6 * 60 * 60) // num hours in sample * num mins * num secs
+        var start = start_.advance(dayOffset, 'days')
+        var end = start.advance(1, 'days')
+        return collection.select('Precipitation_rate_surface_6_Hour_Average')
+                      .filterDate(start, end)
+                      .sum()
+                      .multiply(precip_conversion_factor)
+                      .rename('daily_rain')
+                      .set('system:time_start', start.millis())
+                      .set('custom:index', (ee.Number(precip_window).subtract(dayOffset)))
+    }
+    
+    // create a list of dates to use to extract precip values
+    var numberOfDays = endDate.difference(startDate, 'days')
+    var daily = ee.ImageCollection(
+                        ee.List.sequence(0, numberOfDays)
+                            .map(function (x) { return sumPrecip(x, startDate) })
+                    )
+
+    function maskLowPrecip(img) {
+        // creates image from difference between retrieval
+        // date (metadate) and the daily-precip reading date (img)
+        // then creates mask where rain less than threshold
+        // outer function then takes minimum # days (since last rain)
+        var rain_threshold = ee.Number(0.254) // 0.254 mm = 0.01 inches of rainfall in a day, source:  Paolo
+        img = ee.Image(img)
+        var delta = ee.Date(metadate).difference(img.date(), 'day')
+        var mask = img.gt(rain_threshold)
+        var out = ee.Image(delta).toFloat().updateMask(mask)
+        var ten = ee.Image(ee.Number(10))
+        return out.unmask(ten) // replace where the image was masked with a 10
+                               // so that there is a value for last_rain and
+                               // the result is not masked out
+    }
+
+    // number of days since last rain
+    var last_precip = daily
+                    .select(['daily_rain'], ['last_precip'])
+                    .filterBounds(image.geometry().bounds({'maxError': 1}))
+                    .map(maskLowPrecip)
+                    .select([0], ['last_precip'])
+                    .min()
+
+    // cumulative precipation of last 3 days (agreed in team meeting)
+    var cum_precip = daily
+                    .select(['daily_rain'], ['cum_precip'])
+                    .filterBounds(image.geometry().bounds({'maxError': 1}))
+                    .limit(cum_precip_window, 'custom:index')
+                    .select([0], ['cum_precip'])
+                    .sum()
+
+
+    return [
+      last_precip,
+      cum_precip
+    ]
+}
+
+exports.retrieve_prior_precipitation = function () {
+    return {
+        "retrieve_prior_precipitation": retrievePrecipImage,
+    }
+}

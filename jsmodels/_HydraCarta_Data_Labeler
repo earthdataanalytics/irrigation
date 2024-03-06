@@ -1,0 +1,478 @@
+/**** Start of imports. If edited, may not auto-convert in the playground. ****/
+var POI = /* color: #ff00ff */ee.Geometry.Point([-121.57294389369315, 38.8250893193156]);
+/***** End of imports. If edited, may not auto-convert in the playground. *****/
+var aoi_labels = ee.FeatureCollection([])
+var defaultStart = '2016-01-01'
+var defaultEnd = '2022-06-30'
+
+var poi = null //ee.Geometry.Point(-120.20356006871707,36.84593865061085)
+
+function jumpToPoint(arg) {
+    poi = ee.Geometry.Point(arg['lon'], arg['lat'])
+    Map.layers().reset()
+    Map.drawingTools().layers().reset()
+    Map.drawingTools().addLayer([poi], 'POI', 'magenta')
+    mapPOI(poi, defaultStart, defaultEnd)
+}
+Map.onClick(jumpToPoint)
+
+function jumpToDate(doy, ndvi, year) {
+  var start = ee.Date(year).advance(doy-1, 'day')
+  var end = start.advance(1, 'day')
+  mapPOI(poi, start, end)
+}
+function retrievePrecip(metadate, location, window_days) {
+    var startDate = ee.Date(metadate).advance(-window_days, 'day')
+    var endDate = ee.Date(metadate).advance(-1, 'day')
+
+    var collection = ee.ImageCollection("NOAA/CFSV2/FOR6H")
+
+    function sumPrecip(dayOffset, start_) {
+        var start = start_.advance(dayOffset, 'days')
+        var end = start.advance(1, 'days')
+        return collection.select('Precipitation_rate_surface_6_Hour_Average')
+                      .filterDate(start, end)
+                      .sum()
+                      .set('system:time_start', start.millis())
+    }
+
+    function extractPrecip(image) {
+        // convert from kg/m^2/s to mm/s over 6 hours
+        var precip_conversion_factor = ee.Number(6 * 60 * 60) // num hours in sample * num mins * num secs
+
+        var precip_value = image.select('Precipitation_rate_surface_6_Hour_Average').reduceRegion(
+          ee.Reducer.first(),
+          location.centroid(),
+          ee.Number(image.projection().nominalScale())
+        ).get('Precipitation_rate_surface_6_Hour_Average')
+        precip_value = ee.Number(precip_value)
+
+        return ee.Feature(null, {
+          'precip_value': precip_value.multiply(precip_conversion_factor),
+          'date': image.date().format('yyyy-MM-dd'),
+          'system:time_start': image.date().millis()
+        })
+    }
+
+    // create a list of dates to use to extract precip values
+    var numberOfDays = endDate.difference(startDate, 'days')
+    var daily = ee.ImageCollection(
+                        ee.List.sequence(0, numberOfDays)
+                            .map(function(x) { return sumPrecip(x, startDate) })
+                    )
+
+    // calculate the total precipitation for each of prior X days
+    var precip_ts = ee.FeatureCollection(daily.map(extractPrecip))
+                     .sort('date', false)
+
+    return precip_ts.aggregate_array('precip_value')
+}
+
+function addMapControls() {
+    var txt_img_date = ui.Label('')
+    var txt_ndvi = ui.Label('')
+    var chart_ndvi = null
+    var txt_rain = ui.Label('')
+    var chart_rain = ui.Chart()
+
+    function showKeyData(layer) {
+        var dt = layer.getName().slice(-10)
+        txt_img_date.setValue('Image date = ' + dt)
+        
+        var ndvi_val = layer.getEeObject()
+                            .select('ndvi')
+                            .reduceRegion(ee.Reducer.mean(), poi)
+                            .getInfo()
+        if (ndvi_val['ndvi']) {
+            ndvi_val = ndvi_val['ndvi'].toFixed(2)
+            txt_ndvi.setValue('NDVI = ' + ndvi_val)
+        } else {
+            txt_ndvi.setValue('NDVI = invalid')
+        }
+
+        if (false) {//!chart_ndvi) {
+            chart_ndvi = ui.Chart.image.series({
+                imageCollection: img_col.select('ndvi'),
+                region: poi,
+                reducer: ee.Reducer.first()
+                }).setOptions({
+                  interpolateNulls: true,
+                  lineWidth: 1,
+                  pointSize: 3,
+                  //title: 'NDVI over Time at a Single Location',
+                  vAxis: {title: 'NDVI'},
+                  hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+                })
+        }
+        if (!chart_ndvi) {
+            chart_ndvi = ui.Chart.image
+                .doySeriesByYear({
+                  imageCollection: img_col,
+                  bandName: 'ndvi',
+                  region: poi,
+                  regionReducer: ee.Reducer.mean(),
+                  scale: 30,
+                  sameDayReducer: ee.Reducer.mean(),
+                  //startDay: 140,
+                  //endDay: 250
+                })
+                .setOptions({
+                  //title: '',
+                  hAxis: {
+                    title: 'Day of year',
+                    titleTextStyle: {italic: false, bold: true},
+                    //viewWindow: {min: '0', max: '365'}
+                  },
+                  vAxis: {
+                    title: 'NDVI',
+                    titleTextStyle: {italic: false, bold: true},
+                    viewWindow: {min: '-0.1', max: '1'},
+                    minValue: -0.1, 
+                    maxValue: 1
+                  },
+                  lineWidth: 1,
+                  //colors: ['red', 'blue', 'green', 'orange', 'purple', 'black', 'grey'],
+                })
+            chart_ndvi.onClick(jumpToDate)
+        }
+
+        var metadate = ee.Date(dt)
+        var precip_y = retrievePrecip(metadate, poi, 10)
+        var precip_x = ee.List.sequence(1, 10, 1)
+
+        var rain_sum = precip_y.reduce(ee.Reducer.sum()).getInfo().toFixed(0)
+        txt_rain.setValue('Sum precipitation last 10 days = ' + rain_sum + ' mm')
+
+        chart_rain = ui.Chart.array.values({array: precip_y, axis: 0, xLabels: precip_x})
+                .setChartType('ColumnChart')
+                .setOptions({
+                    //title: '',
+                    //colors: ['96356f'],
+                    hAxis: {
+                      title: 'Days before displayed image',
+                      titleTextStyle: {italic: false, bold: true}
+                    },
+                    vAxis: {
+                      title: 'Daily precipation (mm)',
+                      titleTextStyle: {italic: false, bold: true},
+                      viewWindow: {min: '0', max: '10'},
+                      minValue: 0, 
+                      //maxValue: 1
+                    },
+                    legend: {position: 'none'},
+                })
+        if (panel) {
+            var widget_list = panel.widgets()
+            widget_list.remove(widget_list.get(widget_list.length()-1))
+            panel.add(chart_rain)
+        }
+    }
+    
+    var maplayers = Map.layers()
+    var cur_idx = maplayers.length()-1
+    maplayers.get(cur_idx).setOpacity(1)
+    maplayers.get(cur_idx).setShown(true)
+    showKeyData(maplayers.get(cur_idx))
+    
+    var slider = ui.Label('')
+    var bt_prev = ui.Label('')
+    var bt_next = ui.Label('')
+
+    var prev_layer = 0
+    var num_layers = maplayers.length()
+    if (num_layers > 1) {
+        slider = ui.Slider(0, num_layers-1, 0, 1)
+        slider.onChange(function(next_layer) {
+            maplayers.get(prev_layer).setOpacity(0)
+            maplayers.get(prev_layer).setShown(false)
+            var next_ = maplayers.get(next_layer)
+            next_.setOpacity(1)
+            next_.setShown(true)
+            prev_layer = next_layer
+            
+            showKeyData(next_)
+        })
+        slider.style().set({ width: '100%' })
+
+        bt_prev = ui.Button({
+            label: '<< Prev',
+            onClick: function() {
+                var curr = slider.getValue()
+                if (curr > 0) {
+                  slider.setValue(curr-1)
+                }   
+            }
+        })
+        bt_next = ui.Button({
+            label: 'Next >>',
+            onClick: function() {
+                var curr = slider.getValue()
+                if (curr < num_layers) {
+                  slider.setValue(curr+1)
+                }   
+            }
+        })
+    }
+
+    var bt_panel = ui.Panel(null,ui.Panel.Layout.flow('horizontal'))
+    bt_panel.add(bt_prev)
+    bt_panel.add(bt_next)
+
+    Map.widgets().reset()
+    var panel = ui.Panel()
+    panel.style().set({ width: '300px', position: 'bottom-left' })
+    panel.add(txt_img_date)
+    panel.add(slider)
+    panel.add(bt_panel)
+    panel.add(txt_rain)
+    panel.add(chart_rain)
+    Map.add(panel)
+
+    var right_panel = ui.Panel()
+    right_panel.style().set({ width: '300px', position: 'bottom-right' })
+    right_panel.add(txt_ndvi)
+    right_panel.add(chart_ndvi)
+    Map.add(right_panel)
+    
+    addLabelerPanel()
+}
+
+function addLabelerPanel() {
+    function saveLabel(bt) {
+        var label = bt.getLabel()
+        if (label == 'Skip') {
+            genNewPOI()
+            return
+        }
+        if (label == 'Irrigated') {
+            label = 1
+        } else { // Rainfed 
+            label = 0
+        }
+        var img_dt = Map.widgets().get(0).widgets().get(0).getValue().slice(-10)
+        var img_yr = parseInt(img_dt.slice(0,4))
+        var img_mo = parseInt(img_dt.slice(5,7))
+        var img_dy = parseInt(img_dt.slice(-2))
+        var new_feature = ee.FeatureCollection([
+            ee.Feature(poi, { 
+                date: img_dt,
+                YEAR: img_yr,
+                MONTH: img_mo,
+                DAY: img_dy,
+                POINT_TYPE: label 
+            })
+        ])
+        aoi_labels = aoi_labels.merge(new_feature)
+        genNewPOI()
+    }
+    var bt_pos = ui.Button({
+        label: 'Irrigated',
+        onClick: saveLabel
+    })
+    var bt_neg = ui.Button({
+        label: 'Rainfed',
+        onClick: saveLabel
+    })
+    var bt_skip = ui.Button({
+        label: 'Skip',
+        onClick: saveLabel
+    })
+
+    var bt_panel = ui.Panel(null,ui.Panel.Layout.flow('horizontal'))
+    bt_panel.add(bt_pos)
+    bt_panel.add(bt_neg)
+    bt_panel.add(bt_skip)
+    
+    function exportLabels() {
+        var asset_name = 'projects/eda-bjonesneu-proto/assets/irrigation/labels/' + Date.now()
+        Export.table.toAsset(aoi_labels, 'export_labels', asset_name)
+        aoi_labels = ee.FeatureCollection([])
+        print('Go to Tasks tab in upper right to Run the export task.')
+    }
+    var bt_export = ui.Button({
+        label: 'Export',
+        onClick: exportLabels
+    })
+
+    var panel = ui.Panel()
+    panel.style().set({ position: 'top-center' })
+    panel.add(bt_panel)
+    panel.add(bt_export)
+    Map.add(panel)
+}
+
+function genNewPOI() {
+    var seed = (Math.floor(Math.random() * 500) + 1) * (Math.floor(Math.random() * 500) + 1)
+    var latlon = ee.FeatureCollection.randomPoints(aoi, 1, seed)
+                                      .randomColumn('random', seed+10)
+                                      .sort('random')
+                                      .first()
+                                      .geometry()
+                                      .coordinates()
+                                      .getInfo()
+    var new_coords = {lon: latlon[0], lat: latlon[1]}
+    jumpToPoint(new_coords)
+}
+
+var rgb_viz = {
+    bands: ['R', 'G', 'B'],
+    min: 0.0,
+    max: 0.3,
+}
+
+function maskClouds(img) {
+  var qa = img.select('QA_PIXEL')
+  var cloudBitMask = 1 << 3
+  var cirrusBitMask = 1 << 2
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+  if (img.id().index('LE07') < 0) {
+      mask = mask.and(qa.bitwiseAnd(cirrusBitMask).eq(0))
+  }
+  return img.updateMask(mask)
+}
+
+function applyScaleFactors(img) {
+  var opticalBands = img.select(['NIR', 'R', 'G', 'B']).multiply(0.0000275).add(-0.2)
+  return img.addBands(opticalBands, null, true)
+}
+
+function calcNDVI(img) {
+    var ndvi = img.normalizedDifference(['NIR', 'R']).rename('ndvi')
+    return img.addBands([ndvi])
+}
+
+function calcBBox(poi) {
+    var diff = 0.02
+    var lonlat = poi.coordinates().getInfo()
+    var west = lonlat[0] - diff
+    var east = lonlat[0] + diff
+    var north = lonlat[1] - diff
+    var south = lonlat[1] + diff
+    return ee.Geometry.BBox(west, south, east, north)
+}
+
+function convertBands(img) {
+    var bands = ['SR_B5', 'SR_B4', 'SR_B3', 'SR_B2', 'QA_PIXEL']
+    if (img.id().index('LE07') > -1) {
+        bands = ['SR_B4', 'SR_B3', 'SR_B2', 'SR_B1', 'QA_PIXEL']
+    }
+    return img.select(bands)
+              .rename(['NIR', 'R', 'G', 'B', 'QA_PIXEL'])
+}
+var ic7 = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')
+    .map(convertBands)
+
+var ic8 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+    .map(convertBands)
+
+var ic9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+    .map(convertBands)
+
+var img_col_all = ic9.merge(ic8)//.merge(ic7)
+
+var img_col = img_col_all
+                    .filter(ee.Filter.lt('CLOUD_COVER', 30))
+                    .map(maskClouds)
+                    .map(calcNDVI)
+                    .map(applyScaleFactors)
+//                    .sort('system:time_start')
+
+function markMaskedPOI(img) {
+    // use this to extract the ndvi under the POI
+    // this is then used to filter out images where the region under the POI is masked
+    var poi_vals = ee.Image(img).reduceRegion(ee.Reducer.first(), poi)
+    img = img.set('custom:ndvi', poi_vals.get('ndvi'))
+    var month = ee.Date(img.get('system:time_start')).format('MM')
+    img = img.set('custom:month', month)
+    return img
+}
+
+function mapPOI(poi, start, end) {
+    var bbox = calcBBox(poi)
+    var tmpcol = img_col.filterDate(start, end)
+                              .filterBounds(bbox)
+                              .randomColumn()
+                              .sort('random')
+                              .map(markMaskedPOI)
+                              .filter(ee.Filter.gt('custom:ndvi', -1))
+                              //.filter(ee.Filter.inList('custom:month', ['00','01','11','12']))
+    // the previous line restricts to a subset of months to balance the data collection
+    var img = ee.Image(tmpcol.first()).clip(bbox)
+    var dt = ee.Date(img.get('system:time_start')).format('YYYY-MM-dd').getInfo()
+    Map.addLayer(img, rgb_viz, 'RGB-'+dt, false, 0.0)
+    addMapControls()
+    Map.centerObject(poi, 14)
+}
+
+var ca_central_valley = ee.Geometry({
+  "type": "Polygon",
+  "coordinates": [
+    [
+      [
+        -122.2286422366599,
+        40.28233810975918
+      ],
+      [
+        -122.38310075342639,
+        39.842682484273325
+      ],
+      [
+        -122.3824508304099,
+        39.11587403235935
+      ],
+      [
+        -121.8331344241599,
+        38.12017202382117
+      ],
+      [
+        -121.6024215335349,
+        37.704124178806325
+      ],
+      [
+        -119.4930465335349,
+        35.21273370921282
+      ],
+      [
+        -119.25906417616741,
+        35.01075684633611
+      ],
+      [
+        -118.8393600100974,
+        34.94300718912039
+      ],
+      [
+        -118.70477749056614,
+        35.23741399555778
+      ],
+      [
+        -119.0535934085349,
+        36.335797909177614
+      ],
+      [
+        -120.3499801272849,
+        37.49521901385896
+      ],
+      [
+        -120.91302944369114,
+        38.13529595072468
+      ],
+      [
+        -121.3717086429099,
+        39.16274032694631
+      ],
+      [
+        -121.76373799407064,
+        39.774008125791156
+      ],
+      [
+        -122.2286422366599,
+        40.28233810975918
+      ]
+    ]
+  ]
+})
+
+var aoi = ca_central_valley
+
+genNewPOI()
+
